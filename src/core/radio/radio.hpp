@@ -376,6 +376,28 @@ public:
                    const Mac::KeyMaterial &aCurrKey,
                    const Mac::KeyMaterial &aNextKey);
 
+    // Map of Pan Id and Key materials.
+    struct PanIdKeyMaterial
+    {
+        uint16_t         panId;
+        otMacKeyMaterial mleKey;
+        otMacKeyMaterial curMacKey;
+        otMacKeyMaterial prevMacKey;
+        otMacKeyMaterial nextMacKey;
+    };
+
+    static constexpr uint8_t kMaxPanKeys = 64;
+    using PanIdKeyMaterialMap            = PanIdKeyMaterial[kMaxPanKeys];
+
+    /**
+     * Sets a Map of Pan Id and MAC keys.
+     *
+     * @param[in] aKeyIdMode         MAC key ID mode.
+     * @param[in] aKeyId             Current MAC key index.
+     * @param[in] aPanIdKeyMaterials Map of Pan Id and Key materials.
+     */
+    void SetMacKey(uint8_t aKeyIdMode, uint8_t aKeyId, PanIdKeyMaterialMap aPanIdKeyMaterials);
+
     /**
      * Sets the current MAC Frame Counter value.
      *
@@ -903,7 +925,19 @@ inline otRadioCaps Radio::GetCaps(void) { return otPlatRadioGetCaps(GetInstanceP
 
 inline int8_t Radio::GetReceiveSensitivity(void) const { return otPlatRadioGetReceiveSensitivity(GetInstancePtr()); }
 
-inline void Radio::SetPanId(Mac::PanId aPanId) { otPlatRadioSetPanId(GetInstancePtr(), aPanId); }
+inline void Radio::SetPanId(Mac::PanId aPanId) { 
+    // Set the provided PAN ID
+    otPlatRadioSetPanId(GetInstancePtr(), aPanId);
+    otOperationalDataset dataset;
+    otError error = otDatasetGetActive(GetInstancePtr(), &dataset);
+    if (error == OT_ERROR_NONE && dataset.mComponents.mIsPanIdsPresent)
+    {
+        for (uint8_t i = 0; i < dataset.mPanIds.mCount; ++i)
+        {
+            otPlatRadioSetPanId(GetInstancePtr(), dataset.mPanIds.mPanIds[i]);
+        }
+    }
+}
 
 inline void Radio::SetAlternateShortAddress(Mac::ShortAddress aShortAddress)
 {
@@ -925,6 +959,30 @@ inline void Radio::SetMacKey(uint8_t                 aKeyIdMode,
 #endif
 
     otPlatRadioSetMacKey(GetInstancePtr(), aKeyIdMode, aKeyId, &aPrevKey, &aCurrKey, &aNextKey, aKeyType);
+}
+
+inline void Radio::SetMacKey(uint8_t             aKeyIdMode,
+                             uint8_t             aKeyId,
+                             PanIdKeyMaterialMap aPanIdKeyMaterials)
+{
+    otRadioKeyType aKeyType;
+    otPanIdKeyMaterialMap cPanIdKeyMaterials;
+
+#if OPENTHREAD_CONFIG_PLATFORM_KEY_REFERENCES_ENABLE
+    aKeyType = OT_KEY_TYPE_KEY_REF;
+#else
+    aKeyType = OT_KEY_TYPE_LITERAL_KEY;
+#endif
+
+    for (uint8_t i = 0; i < kMaxPanKeys; ++i)
+    {
+        cPanIdKeyMaterials[i].panId      = aPanIdKeyMaterials[i].panId;
+        cPanIdKeyMaterials[i].curMacKey  = aPanIdKeyMaterials[i].curMacKey;
+        cPanIdKeyMaterials[i].prevMacKey = aPanIdKeyMaterials[i].prevMacKey;
+        cPanIdKeyMaterials[i].nextMacKey = aPanIdKeyMaterials[i].nextMacKey;
+    }
+    otPlatRadioSetMacKeyMap(GetInstancePtr(), aKeyIdMode, aKeyId, cPanIdKeyMaterials, aKeyType);
+    
 }
 
 inline Error Radio::GetTransmitPower(int8_t &aPower) { return otPlatRadioGetTransmitPower(GetInstancePtr(), &aPower); }

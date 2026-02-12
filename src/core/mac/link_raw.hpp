@@ -257,6 +257,19 @@ public:
     Error SetMacKey(uint8_t aKeyIdMode, uint8_t aKeyId, const Key &aPrevKey, const Key &aCurrKey, const Key &aNextKey);
 
     /**
+     * Updates Multi-PAN MAC keys and key index.
+     *
+     * @param[in]   aKeyIdMode        The key ID mode.
+     * @param[in]   aKeyId            The key index.
+     * @param[in]   aPanIdKeyMap      Array of PAN ID key map for Multi-PAN support.
+     *
+     * @retval kErrorNone            If successful.
+     * @retval kErrorFailed          Platform failed to import key.
+     * @retval kErrorInvalidState    If the raw link-layer isn't enabled.
+     */
+    Error SetMacKey(uint8_t aKeyIdMode, uint8_t aKeyId, const otPanIdKeyMap aPanIdKeyMap);
+
+    /**
      * Sets the current MAC frame counter value.
      *
      * @param[in] aFrameCounter  The MAC frame counter value.

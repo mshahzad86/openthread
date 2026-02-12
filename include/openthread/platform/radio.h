@@ -221,6 +221,44 @@ typedef struct otMacKeyMaterial
 } otMacKeyMaterial;
 
 /**
+ * @struct otPanIdKeyMaterial
+ *
+ * Represents a Map of Pan ID and MAC Key material.
+ */
+typedef struct otPanIdKeyMaterial
+{
+    uint16_t         panId;
+    otMacKeyMaterial curMacKey;
+    otMacKeyMaterial prevMacKey;
+    otMacKeyMaterial nextMacKey;
+} otPanIdKeyMaterial;
+
+/**
+ * @struct otPanIdKey
+ *
+ * Represents a Map of Pan ID and MAC Key.
+ */
+typedef struct otPanIdKey
+{
+    uint16_t    panId;
+    otMacKey    curMacKey;
+    otMacKey    prevMacKey;
+    otMacKey    nextMacKey;
+} otPanIdKey;
+
+#ifdef __cplusplus
+// C++-specific code
+static constexpr uint8_t kMaxPanKeys = 64;
+using otPanIdKeyMaterialMap = otPanIdKeyMaterial[kMaxPanKeys];
+using otPanIdKeyMap = otPanIdKey[kMaxPanKeys];
+#else
+// C-compatible code
+#define kMaxPanKeys 64
+typedef otPanIdKeyMaterial otPanIdKeyMaterialMap[kMaxPanKeys];
+typedef otPanIdKey otPanIdKeyMap[kMaxPanKeys];
+#endif
+
+/**
  * Defines constants about key types.
  */
 typedef enum
@@ -723,6 +761,27 @@ void otPlatRadioSetMacKey(otInstance             *aInstance,
                           const otMacKeyMaterial *aCurrKey,
                           const otMacKeyMaterial *aNextKey,
                           otRadioKeyType          aKeyType);
+
+/**
+ * Update Map of Pan Id, MAC keys and key index
+ *
+ * Is used when radio provides OT_RADIO_CAPS_TRANSMIT_SEC capability.
+ *
+ * The radio platform should reset the current security MAC frame counter tracked by the radio on this call. While this
+ * is highly recommended, the OpenThread stack, as a safeguard, will also reset the frame counter using the
+ * `otPlatRadioSetMacFrameCounter()` before calling this API.
+ *
+ * @param[in]   aInstance              A pointer to an OpenThread instance.
+ * @param[in]   aKeyIdMode             The key ID mode.
+ * @param[in]   aKeyId                 Current MAC key index.
+ * @param[in]   aPanIdKeyMaterials     A pointer to the map of Pan ID and MAC key.
+ * @param[in]   aKeyType               Key Type used.
+ */
+void otPlatRadioSetMacKeyMap(otInstance            *aInstance,
+                             uint8_t               aKeyIdMode,
+                             uint8_t               aKeyId,
+                             otPanIdKeyMaterialMap aPanIdKeyMaterials,
+                             otRadioKeyType        aKeyType);
 
 /**
  * Sets the current MAC frame counter value.

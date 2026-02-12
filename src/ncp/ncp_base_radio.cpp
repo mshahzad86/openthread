@@ -569,6 +569,49 @@ exit:
     return error;
 }
 
+template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_RCP_MAC_KEY_MULTIPAN>(void)
+{
+    otError        error = OT_ERROR_NONE;
+    uint8_t        keyIdMode;
+    uint8_t        keyId;
+    uint16_t       panId;
+    uint16_t       keySize;
+    const uint8_t *curKey;
+    const uint8_t *prevKey;
+    const uint8_t *nextKey;
+    otPanIdKeyMap  panIdKeyMap;
+
+    SuccessOrExit(error = mDecoder.ReadUint8(keyIdMode));
+    VerifyOrExit(keyIdMode == Mac::Frame::kKeyIdMode1, error = OT_ERROR_INVALID_ARGS);
+
+    SuccessOrExit(error = mDecoder.ReadUint8(keyId));
+
+    for (int i = 0; i < kMaxPanKeys; i++)
+    {
+        SuccessOrExit(error = mDecoder.ReadUint16(panId));
+
+        SuccessOrExit(error = mDecoder.ReadDataWithLen(prevKey, keySize));
+        VerifyOrExit(keySize == sizeof(otMacKey), error = OT_ERROR_INVALID_ARGS);
+
+        SuccessOrExit(error = mDecoder.ReadDataWithLen(curKey, keySize));
+        VerifyOrExit(keySize == sizeof(otMacKey), error = OT_ERROR_INVALID_ARGS);
+
+        SuccessOrExit(error = mDecoder.ReadDataWithLen(nextKey, keySize));
+        VerifyOrExit(keySize == sizeof(otMacKey), error = OT_ERROR_INVALID_ARGS);
+
+        panIdKeyMap[i].panId = panId;
+        memcpy(&panIdKeyMap[i].curMacKey, curKey, sizeof(otMacKey));
+        memcpy(&panIdKeyMap[i].prevMacKey, prevKey, sizeof(otMacKey));
+        memcpy(&panIdKeyMap[i].nextMacKey, nextKey, sizeof(otMacKey));
+    }
+
+    // Use the new Multi-PAN function
+    error = otLinkRawSetMacKeyMultiPan(mInstance, keyIdMode, keyId, panIdKeyMap);
+
+exit:
+    return error;
+}
+
 template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_RCP_MAC_FRAME_COUNTER>(void)
 {
     otError  error = OT_ERROR_NONE;

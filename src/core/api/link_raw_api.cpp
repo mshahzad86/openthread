@@ -210,6 +210,14 @@ otError otLinkRawSetMacKey(otInstance     *aInstance,
                                                                AsCoreType(aCurrKey), AsCoreType(aNextKey));
 }
 
+otError otLinkRawSetMacKeyMultiPan(otInstance          *aInstance,
+                                   uint8_t             aKeyIdMode,
+                                   uint8_t             aKeyId,
+                                   const otPanIdKeyMap aPanIdKeyMap)
+{
+    return AsCoreType(aInstance).Get<Mac::LinkRaw>().SetMacKey(aKeyIdMode, aKeyId, aPanIdKeyMap);
+}
+
 otError otLinkRawSetMacFrameCounter(otInstance *aInstance, uint32_t aMacFrameCounter)
 {
     return AsCoreType(aInstance).Get<Mac::LinkRaw>().SetMacFrameCounter(aMacFrameCounter, /* aSetIfLarger */ false);
