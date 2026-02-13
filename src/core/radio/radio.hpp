@@ -919,6 +919,7 @@ inline otRadioCaps Radio::GetCaps(void) { return otPlatRadioGetCaps(GetInstanceP
 
 inline int8_t Radio::GetReceiveSensitivity(void) const { return otPlatRadioGetReceiveSensitivity(GetInstancePtr()); }
 
+#if OPENTHREAD_MTD || OPENTHREAD_FTD
 inline void Radio::SetPanId(Mac::PanId aPanId) { 
     // Set the provided PAN ID
     otPlatRadioSetPanId(GetInstancePtr(), aPanId);
@@ -932,6 +933,11 @@ inline void Radio::SetPanId(Mac::PanId aPanId) {
         }
     }
 }
+#else
+inline void Radio::SetPanId(Mac::PanId aPanId) { 
+    otPlatRadioSetPanId(GetInstancePtr(), aPanId);
+}
+#endif
 
 inline void Radio::SetAlternateShortAddress(Mac::ShortAddress aShortAddress)
 {

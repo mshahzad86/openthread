@@ -196,6 +196,7 @@ void TxFrame::Info::PrepareHeadersIn(TxFrame &aTxFrame) const
 
     if (IsDstPanIdPresent(fcf))
     {
+#if OPENTHREAD_MTD || OPENTHREAD_FTD
         auto &instance = ot::Instance::Get();
         auto &mac = instance.Get<ot::Mac::Mac>();
         if(mac.GetTemporaryPanIdValid() && !mac.IsPanIdInList(mPanIds.GetDestination()))
@@ -204,10 +205,15 @@ void TxFrame::Info::PrepareHeadersIn(TxFrame &aTxFrame) const
             LogWarn("Set dst pan id %04x", mac.GetTemporaryPanId());
             mac.SetTemporaryPanIdValid(false);
         }
-        else{
+        else
+        {
             LogWarn("Set dst pan id %04x", mPanIds.GetDestination());
             IgnoreError(builder.AppendLittleEndianUint16(mPanIds.GetDestination()));
         }
+#else
+        LogWarn("Set dst pan id %04x", mPanIds.GetDestination());
+        IgnoreError(builder.AppendLittleEndianUint16(mPanIds.GetDestination()));
+#endif
     }
 
     IgnoreError(builder.AppendMacAddress(mAddrs.mDestination));
