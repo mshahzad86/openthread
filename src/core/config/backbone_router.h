@@ -49,7 +49,7 @@
  * Define to 1 to enable Backbone Router support.
  */
 #ifndef OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
-#define OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE 0
+#define OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE 1
 #endif
 
 /**

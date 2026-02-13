@@ -117,6 +117,18 @@ const Dataset::ComponentMapper *Dataset::LookupMapper(const char *aName) const
             &Dataset::ParsePanId,
         },
         {
+            "panids",
+            &Components::mIsPanIdsPresent,
+            &Dataset::OutputPanIds,
+            &Dataset::ParsePanIds,
+        },
+        {
+            "pankeys",
+            &Components::mIsPanKeysPresent,
+            &Dataset::OutputPanKeys,
+            &Dataset::ParsePanKeys,
+        },
+        {
             "pendingtimestamp",
             &Components::mIsPendingTimestampPresent,
             &Dataset::OutputPendingTimestamp,
@@ -361,6 +373,63 @@ void Dataset::OutputPanId(const otOperationalDataset &aDataset) { OutputLine("0x
  * @par
  * Gets or sets #otOperationalDataset::mPendingTimestamp.
  */
+
+/**
+ * @cli dataset panids (get,set)
+ * @code
+ * dataset panids
+ * 0x1234
+ * 0x5678
+ * Done
+ * @endcode
+ * @code
+ * dataset panids 0x1234 0x5678
+ * Done
+ * @endcode
+ * @cparam dataset panids [@ca{panid} ...]
+ * Use the optional list of `panid` arguments to set the PAN ID list.
+ * @par
+ * Gets or sets #otOperationalDataset::mPanIds.
+ */
+void Dataset::OutputPanIds(const otOperationalDataset &aDataset)
+{
+    if (aDataset.mComponents.mIsPanIdsPresent)
+    {
+        for (uint8_t i = 0; i < aDataset.mPanIds.mCount; i++)
+        {
+            OutputLine("0x%04x", aDataset.mPanIds.mPanIds[i]);
+        }
+    }
+}
+
+/**
+ * @cli dataset pankeys (get,set)
+ * @code
+ * dataset pankeys
+ * 00112233445566778899aabbccddeeff
+ * 112233445566778899aabbccddeeff00
+ * Done
+ * @endcode
+ * @code
+ * dataset pankeys 00112233445566778899aabbccddeeff 112233445566778899aabbccddeeff00
+ * Done
+ * @endcode
+ * @cparam dataset pankeys [@ca{key} ...]
+ * Use the optional list of `key` arguments to set the PAN Key list.
+ * @par
+ * Gets or sets #otOperationalDataset::mPanKeys.
+ */
+void Dataset::OutputPanKeys(const otOperationalDataset &aDataset)
+{
+    if (aDataset.mComponents.mIsPanKeysPresent)
+    {
+        for (uint8_t i = 0; i < aDataset.mPanKeys.mCount; i++)
+        {
+            OutputBytesLine(aDataset.mPanKeys.mPanKeys[i].m8);
+        }
+    }
+}
+
 void Dataset::OutputPendingTimestamp(const otOperationalDataset &aDataset)
 {
     OutputUint64Line(aDataset.mPendingTimestamp.mSeconds);
@@ -487,7 +556,69 @@ exit:
 
 otError Dataset::ParsePanId(Arg *&aArgs, otOperationalDataset &aDataset)
 {
-    return aArgs++->ParseAsUint16(aDataset.mPanId);
+   otError error = OT_ERROR_NONE;
+
+
+    uint16_t panId;
+
+    SuccessOrExit(error = aArgs->ParseAsUint16(panId));
+    aArgs++;
+
+    aDataset.mPanId = panId;
+    aDataset.mComponents.mIsPanIdPresent = true;
+
+exit:
+    return error;
+}
+
+otError Dataset::ParsePanIds(Arg *&aArgs, otOperationalDataset &aDataset)
+{
+    otError error = OT_ERROR_NONE;
+    uint16_t panId;
+    uint8_t count = 0;
+
+    // Clear existing PAN IDs
+    memset(&aDataset.mPanIds, 0, sizeof(aDataset.mPanIds));
+
+    // Parse all PAN IDs from command line
+    while (!aArgs->IsEmpty() && count < OT_MAX_PAN_IDS)
+    {
+        SuccessOrExit(error = aArgs->ParseAsUint16(panId));
+        aArgs++;
+
+        aDataset.mPanIds.mPanIds[count++] = panId;
+    }
+
+    // Set presence flag if we have any PAN IDs
+    aDataset.mComponents.mIsPanIdsPresent = (count > 0);
+    aDataset.mPanIds.mCount = count;
+
+exit:
+    return error;
+}
+
+otError Dataset::ParsePanKeys(Arg *&aArgs, otOperationalDataset &aDataset)
+{
+    otError error = OT_ERROR_NONE;
+    uint8_t count = 0;
+
+    // Clear existing PAN Keys
+    memset(&aDataset.mPanKeys, 0, sizeof(aDataset.mPanKeys));
+
+    // Parse all PAN Keys from command line
+    while (!aArgs->IsEmpty() && count < OT_MAX_PAN_KEYS)
+    {
+        SuccessOrExit(error = aArgs->ParseAsHexString(aDataset.mPanKeys.mPanKeys[count].m8));
+        aArgs++;
+        count++;
+    }
+
+    // Set presence flag if we have any PAN Keys
+    aDataset.mComponents.mIsPanKeysPresent = (count > 0);
+    aDataset.mPanKeys.mCount = count;
+
+exit:
+    return error;
 }
 
 otError Dataset::ParsePendingTimestamp(Arg *&aArgs, otOperationalDataset &aDataset)
@@ -599,6 +730,8 @@ otError Dataset::Print(otOperationalDatasetTlvs &aDatasetTlvs, bool aNonsensitiv
         {"Network Key", "networkkey", true},
         {"Network Name", "networkname", false},
         {"PAN ID", "panid", false},
+        {"PAN IDs", "panids", false},//TODO: Make it true
+        {"PAN Keys", "pankeys", true},
         {"PSKc", "pskc", true},
         {"Security Policy", "securitypolicy", false},
     };

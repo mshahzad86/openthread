@@ -962,7 +962,46 @@ void SubMac::SetMacKey(uint8_t            aKeyIdMode,
 
     VerifyOrExit(!ShouldHandleTransmitSecurity());
 
-    Get<Radio>().SetMacKey(aKeyIdMode, aKeyId, aPrevKey, aCurrKey, aNextKey);
+    Get<Radio>().SetMacKeySingle(aKeyIdMode, aKeyId, aPrevKey, aCurrKey, aNextKey);
+
+exit:
+    return;
+}
+
+void SubMac::SetMacKey(uint8_t aKeyIdMode, uint8_t aKeyId, const PanIdKeyMaterialMap &aPanIdKeyMaterials)
+{
+    switch (aKeyIdMode)
+    {
+    case Frame::kKeyIdMode0:
+    case Frame::kKeyIdMode2:
+        break;
+    case Frame::kKeyIdMode1:
+        mKeyId             = aKeyId;
+        // Copy the array elements manually
+        for (uint8_t i = 0; i < kMaxPanKeys; ++i)
+        {
+            mPanIdKeyMaterials[i] = aPanIdKeyMaterials[i];
+        }
+        break;
+
+    default:
+        OT_ASSERT(false);
+        break;
+    }
+
+    VerifyOrExit(!ShouldHandleTransmitSecurity());
+    // Radio side change to do the same and Update the args
+    ot::Radio::PanIdKeyMaterial tempKeyMaterials[kMaxPanKeys];
+
+    for (uint8_t i = 0; i < kMaxPanKeys; ++i)
+    {
+        tempKeyMaterials[i].panId      = aPanIdKeyMaterials[i].panId;
+        tempKeyMaterials[i].curMacKey  = aPanIdKeyMaterials[i].curMacKey;
+        tempKeyMaterials[i].prevMacKey = aPanIdKeyMaterials[i].prevMacKey;
+        tempKeyMaterials[i].nextMacKey = aPanIdKeyMaterials[i].nextMacKey;
+    }
+
+    Get<Radio>().SetMacKey(aKeyIdMode, aKeyId, tempKeyMaterials);
 
 exit:
     return;
@@ -1159,6 +1198,58 @@ const char *SubMac::StateToString(State aState)
 }
 
 // LCOV_EXCL_STOP
+    const KeyMaterial &SubMac::GetCurrentMacKeyForPanId(uint16_t aPanId) const
+    {
+        for (uint8_t i = 0; i < kMaxPanKeys; ++i)
+        {
+            if (mPanIdKeyMaterials[i].panId == aPanId)
+            {
+                return static_cast<const KeyMaterial &>(mPanIdKeyMaterials[i].curMacKey);
+            }
+        }
 
+        // Return the default current key if PAN ID not found
+        return mCurrKey;
+    }
+
+    const KeyMaterial &SubMac::GetPreviousMacKeyForPanId(uint16_t aPanId) const
+    {
+        for (uint8_t i = 0; i < kMaxPanKeys; ++i)
+        {
+            if (mPanIdKeyMaterials[i].panId == aPanId)
+            {
+                return static_cast<const KeyMaterial &>(mPanIdKeyMaterials[i].prevMacKey);
+            }
+        }
+
+        // Return the default previous key if PAN ID not found
+        return mPrevKey;
+    }
+
+    const KeyMaterial &SubMac::GetNextMacKeyForPanId(uint16_t aPanId) const
+    {
+        for (uint8_t i = 0; i < kMaxPanKeys; ++i)
+        {
+            if (mPanIdKeyMaterials[i].panId == aPanId)
+            {
+                return static_cast<const KeyMaterial &>(mPanIdKeyMaterials[i].nextMacKey);
+            }
+        }
+
+        // Return the default next key if PAN ID not found
+        return mNextKey;
+    }
+
+    bool SubMac::HasPanIdKeyMaterial(uint16_t aPanId) const
+    {
+        for (uint8_t i = 0; i < kMaxPanKeys; ++i)
+        {
+            if (mPanIdKeyMaterials[i].panId == aPanId)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
 } // namespace Mac
 } // namespace ot

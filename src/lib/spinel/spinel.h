@@ -5110,6 +5110,24 @@ enum
 
     SPINEL_PROP_DEBUG__END = 0x4400,
 
+    SPINEL_PROP_DEBUG_MULTIPAN_BEGIN = 0x4400,
+
+    /// Multi-PAN MAC Key Map
+    /** Format: `CCt(A(t(Sddd)))`.
+     *
+     *  `C`: MAC key ID mode
+     *  `C`: MAC key ID
+     *  `t(A(t(Sddd)))`: Array of PAN ID key structures
+     *    `S`: PAN ID (16-bit)
+     *    `d`: current MAC key data
+     *    `d`: previous MAC key data
+     *    `d`: next MAC key data
+     *
+     * The Spinel property is used to set/get Multi-PAN MAC key materials to and from RCP.
+     * This property supports multiple PAN IDs with their associated MAC keys.
+     */
+    SPINEL_PROP_RCP_MAC_KEY_MULTIPAN = SPINEL_PROP_DEBUG_MULTIPAN_BEGIN + 0,
+
     SPINEL_PROP_EXPERIMENTAL__BEGIN = 2000000,
     SPINEL_PROP_EXPERIMENTAL__END   = 2097152,
 };

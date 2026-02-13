@@ -203,6 +203,8 @@ typedef struct otOperationalDatasetComponents
     bool mIsMeshLocalPrefixPresent;  ///< TRUE if Mesh Local Prefix is present, FALSE otherwise.
     bool mIsDelayPresent;            ///< TRUE if Delay Timer is present, FALSE otherwise.
     bool mIsPanIdPresent;            ///< TRUE if PAN ID is present, FALSE otherwise.
+    bool mIsPanIdsPresent;           ///< TRUE if PAN IDs list is present, FALSE otherwise.
+    bool mIsPanKeysPresent;          ///< TRUE if PAN Keys list is present, FALSE otherwise.
     bool mIsChannelPresent;          ///< TRUE if Channel is present, FALSE otherwise.
     bool mIsPskcPresent;             ///< TRUE if PSKc is present, FALSE otherwise.
     bool mIsSecurityPolicyPresent;   ///< TRUE if Security Policy is present, FALSE otherwise.
@@ -220,6 +222,27 @@ typedef struct otTimestamp
     bool     mAuthoritative;
 } otTimestamp;
 
+#define OT_MAX_PAN_IDS 64  ///< Maximum number of PAN IDs that can be stored
+#define OT_MAX_PAN_KEYS 64  ///< Maximum number of PAN Keys that can be stored
+
+/**
+ * Represents a list of PAN IDs.
+ */
+typedef struct otPanIdList
+{
+    otPanId mPanIds[OT_MAX_PAN_IDS];  ///< Array of PAN IDs
+    uint8_t mCount;                   ///< Number of PAN IDs in the list
+} otPanIdList;
+
+/** 
+ * Represents a list of PAN Keys.
+ */
+typedef struct otPanKeyList
+{
+    otNetworkKey mPanKeys[OT_MAX_PAN_KEYS];  ///< Array of PAN Keys
+    uint8_t mCount;                          ///< Number of PAN Keys in the list
+} otPanKeyList;
+
 /**
  * Represents an Active or Pending Operational Dataset.
  *
@@ -235,6 +258,8 @@ typedef struct otOperationalDataset
     otMeshLocalPrefix              mMeshLocalPrefix;  ///< Mesh Local Prefix
     uint32_t                       mDelay;            ///< Delay Timer
     otPanId                        mPanId;            ///< PAN ID
+    otPanIdList                    mPanIds;           ///< List of PAN IDs
+    otPanKeyList                   mPanKeys;          ///< List of PAN Keys
     uint16_t                       mChannel;          ///< Channel
     uint16_t                       mWakeupChannel;    ///< Wake-up Channel
     otPskc                         mPskc;             ///< PSKc
@@ -266,27 +291,28 @@ typedef enum otMeshcopTlvType
 {
     OT_MESHCOP_TLV_CHANNEL                  = 0,   ///< meshcop Channel TLV
     OT_MESHCOP_TLV_PANID                    = 1,   ///< meshcop Pan Id TLV
-    OT_MESHCOP_TLV_EXTPANID                 = 2,   ///< meshcop Extended Pan Id TLV
-    OT_MESHCOP_TLV_NETWORKNAME              = 3,   ///< meshcop Network Name TLV
-    OT_MESHCOP_TLV_PSKC                     = 4,   ///< meshcop PSKc TLV
-    OT_MESHCOP_TLV_NETWORKKEY               = 5,   ///< meshcop Network Key TLV
-    OT_MESHCOP_TLV_NETWORK_KEY_SEQUENCE     = 6,   ///< meshcop Network Key Sequence TLV
-    OT_MESHCOP_TLV_MESHLOCALPREFIX          = 7,   ///< meshcop Mesh Local Prefix TLV
-    OT_MESHCOP_TLV_STEERING_DATA            = 8,   ///< meshcop Steering Data TLV
-    OT_MESHCOP_TLV_BORDER_AGENT_RLOC        = 9,   ///< meshcop Border Agent Locator TLV
-    OT_MESHCOP_TLV_COMMISSIONER_ID          = 10,  ///< meshcop Commissioner ID TLV
-    OT_MESHCOP_TLV_COMM_SESSION_ID          = 11,  ///< meshcop Commissioner Session ID TLV
-    OT_MESHCOP_TLV_SECURITYPOLICY           = 12,  ///< meshcop Security Policy TLV
-    OT_MESHCOP_TLV_GET                      = 13,  ///< meshcop Get TLV
-    OT_MESHCOP_TLV_ACTIVETIMESTAMP          = 14,  ///< meshcop Active Timestamp TLV
-    OT_MESHCOP_TLV_COMMISSIONER_UDP_PORT    = 15,  ///< meshcop Commissioner UDP Port TLV
-    OT_MESHCOP_TLV_STATE                    = 16,  ///< meshcop State TLV
-    OT_MESHCOP_TLV_JOINER_DTLS              = 17,  ///< meshcop Joiner DTLS Encapsulation TLV
-    OT_MESHCOP_TLV_JOINER_UDP_PORT          = 18,  ///< meshcop Joiner UDP Port TLV
-    OT_MESHCOP_TLV_JOINER_IID               = 19,  ///< meshcop Joiner IID TLV
-    OT_MESHCOP_TLV_JOINER_RLOC              = 20,  ///< meshcop Joiner Router Locator TLV
-    OT_MESHCOP_TLV_JOINER_ROUTER_KEK        = 21,  ///< meshcop Joiner Router KEK TLV
-    OT_MESHCOP_TLV_DURATION                 = 23,  ///< meshcop Duration TLV
+    OT_MESHCOP_TLV_PANIDS                   = 3,   ///< meshcop Pan Ids List TLV
+    OT_MESHCOP_TLV_EXTPANID                 = 4,   ///< meshcop Extended Pan Id TLV
+    OT_MESHCOP_TLV_NETWORKNAME              = 5,   ///< meshcop Network Name TLV
+    OT_MESHCOP_TLV_PSKC                     = 6,   ///< meshcop PSKc TLV
+    OT_MESHCOP_TLV_NETWORKKEY               = 7,   ///< meshcop Network Key TLV
+    OT_MESHCOP_TLV_NETWORK_KEY_SEQUENCE     = 8,   ///< meshcop Network Key Sequence TLV
+    OT_MESHCOP_TLV_MESHLOCALPREFIX          = 9,   ///< meshcop Mesh Local Prefix TLV
+    OT_MESHCOP_TLV_STEERING_DATA            = 10,   ///< meshcop Steering Data TLV
+    OT_MESHCOP_TLV_BORDER_AGENT_RLOC        = 11,   ///< meshcop Border Agent Locator TLV
+    OT_MESHCOP_TLV_COMMISSIONER_ID          = 12,  ///< meshcop Commissioner ID TLV
+    OT_MESHCOP_TLV_COMM_SESSION_ID          = 13,  ///< meshcop Commissioner Session ID TLV
+    OT_MESHCOP_TLV_SECURITYPOLICY           = 14,  ///< meshcop Security Policy TLV
+    OT_MESHCOP_TLV_GET                      = 15,  ///< meshcop Get TLV
+    OT_MESHCOP_TLV_ACTIVETIMESTAMP          = 16,  ///< meshcop Active Timestamp TLV
+    OT_MESHCOP_TLV_COMMISSIONER_UDP_PORT    = 17,  ///< meshcop Commissioner UDP Port TLV
+    OT_MESHCOP_TLV_STATE                    = 18,  ///< meshcop State TLV
+    OT_MESHCOP_TLV_JOINER_DTLS              = 19,  ///< meshcop Joiner DTLS Encapsulation TLV
+    OT_MESHCOP_TLV_JOINER_UDP_PORT          = 20,  ///< meshcop Joiner UDP Port TLV
+    OT_MESHCOP_TLV_JOINER_IID               = 21,  ///< meshcop Joiner IID TLV
+    OT_MESHCOP_TLV_JOINER_RLOC              = 22,  ///< meshcop Joiner Router Locator TLV
+    OT_MESHCOP_TLV_JOINER_ROUTER_KEK        = 23,  ///< meshcop Joiner Router KEK TLV
+    OT_MESHCOP_TLV_DURATION                 = 24,  ///< meshcop Duration TLV
     OT_MESHCOP_TLV_PROVISIONING_URL         = 32,  ///< meshcop Provisioning URL TLV
     OT_MESHCOP_TLV_VENDOR_NAME_TLV          = 33,  ///< meshcop Vendor Name TLV
     OT_MESHCOP_TLV_VENDOR_MODEL_TLV         = 34,  ///< meshcop Vendor Model TLV

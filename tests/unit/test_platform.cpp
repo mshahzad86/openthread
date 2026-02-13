@@ -194,6 +194,36 @@ OT_TOOL_WEAK otError otPlatRadioEnergyScan(otInstance *, uint8_t, uint16_t) { re
 
 OT_TOOL_WEAK otError otPlatRadioSetTransmitPower(otInstance *, int8_t) { return OT_ERROR_NOT_IMPLEMENTED; }
 
+OT_TOOL_WEAK void otPlatRadioSetMacKey(otInstance             *aInstance,
+                                      uint8_t                 aKeyIdMode,
+                                      uint8_t                 aKeyId,
+                                      otPanIdKeyMaterialMap   aPanIdKeyMaterials,
+                                      otRadioKeyType          aKeyType)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aKeyIdMode);
+    OT_UNUSED_VARIABLE(aKeyId);
+    OT_UNUSED_VARIABLE(aPanIdKeyMaterials);
+    OT_UNUSED_VARIABLE(aKeyType);
+}
+
+OT_TOOL_WEAK void otPlatRadioSetMacKeySingle(otInstance             *aInstance,
+                                       uint8_t                 aKeyIdMode,
+                                       uint8_t                 aKeyId,
+                                       const otMacKeyMaterial *aPrevKey,
+                                       const otMacKeyMaterial *aCurrKey,
+                                       const otMacKeyMaterial *aNextKey,
+                                       otRadioKeyType          aKeyType)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aKeyIdMode);
+    OT_UNUSED_VARIABLE(aKeyId);
+    OT_UNUSED_VARIABLE(aPrevKey);
+    OT_UNUSED_VARIABLE(aCurrKey);
+    OT_UNUSED_VARIABLE(aNextKey);
+    OT_UNUSED_VARIABLE(aKeyType);
+}
+
 OT_TOOL_WEAK int8_t otPlatRadioGetReceiveSensitivity(otInstance *) { return -100; }
 
 OT_TOOL_WEAK otError otPlatEntropyGet(uint8_t *aOutput, uint16_t aOutputLength)

@@ -35,6 +35,8 @@
 
 #include "instance/instance.hpp"
 #include "utils/static_counter.hpp"
+#include "thread/child_table.hpp"
+#include "thread/child.hpp"
 
 namespace ot {
 

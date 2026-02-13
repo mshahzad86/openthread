@@ -75,6 +75,8 @@ public:
     {
         kChannel                 = OT_MESHCOP_TLV_CHANNEL,                  ///< Channel TLV
         kPanId                   = OT_MESHCOP_TLV_PANID,                    ///< PAN ID TLV
+        kPanIds                  = OT_MESHCOP_TLV_PANIDS,                   ///< PAN IDs List TLV
+        kPanKeys                 = OT_MESHCOP_TLV_PANKEYS,                  ///< PAN Keys List TLV
         kExtendedPanId           = OT_MESHCOP_TLV_EXTPANID,                 ///< Extended PAN ID TLV
         kNetworkName             = OT_MESHCOP_TLV_NETWORKNAME,              ///< Network Name TLV
         kPskc                    = OT_MESHCOP_TLV_PSKC,                     ///< PSKc TLV
@@ -1181,6 +1183,16 @@ public:
     static constexpr uint8_t kForwardJoinerRelayRx = 1 << 7; ///< Forward RelayRx (from Joiners) to Enroller.
     static constexpr uint8_t kForwardUdpProxyRx    = 1 << 6; ///< Forward UDP ProxyRx to Enroller.
 };
+
+/**
+ * Defines PAN IDs List TLV constants and types.
+ */
+typedef SimpleTlvInfo<Tlv::kPanIds, otPanIdList> PanIdsTlv;
+
+/**
+ * Defines PAN Keys List TLV constants and types.
+ */
+typedef SimpleTlvInfo<Tlv::kPanKeys, otPanKeyList> PanKeysTlv;
 
 } // namespace MeshCoP
 

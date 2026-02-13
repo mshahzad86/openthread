@@ -234,7 +234,7 @@ extern "C" OT_TOOL_WEAK otRadioState otPlatRadioGetState(otInstance *aInstance)
     return OT_RADIO_STATE_INVALID;
 }
 
-extern "C" OT_TOOL_WEAK void otPlatRadioSetMacKey(otInstance             *aInstance,
+extern "C" OT_TOOL_WEAK void otPlatRadioSetMacKeySingle(otInstance             *aInstance,
                                                   uint8_t                 aKeyIdMode,
                                                   uint8_t                 aKeyId,
                                                   const otMacKeyMaterial *aPrevKey,

@@ -41,6 +41,8 @@
 #include "common/log.hpp"
 #include "common/num_utils.hpp"
 #include "radio/trel_link.hpp"
+#include "instance/instance.hpp"
+#include "mac/mac.hpp"
 #if OPENTHREAD_FTD || OPENTHREAD_MTD || OPENTHREAD_CONFIG_MAC_SOFTWARE_TX_SECURITY_ENABLE
 #include "crypto/aes_ccm.hpp"
 #endif
@@ -48,6 +50,7 @@
 namespace ot {
 namespace Mac {
 
+RegisterLogModule("MacFrame");
 void TxFrame::Info::PrepareHeadersIn(TxFrame &aTxFrame) const
 {
     uint16_t     fcf;
@@ -193,7 +196,18 @@ void TxFrame::Info::PrepareHeadersIn(TxFrame &aTxFrame) const
 
     if (IsDstPanIdPresent(fcf))
     {
-        IgnoreError(builder.AppendLittleEndianUint16(mPanIds.GetDestination()));
+        auto &instance = ot::Instance::Get();
+        auto &mac = instance.Get<ot::Mac::Mac>();
+        if(mac.GetTemporaryPanIdValid() && !mac.IsPanIdInList(mPanIds.GetDestination()))
+        {
+            IgnoreError(builder.AppendLittleEndianUint16(mac.GetTemporaryPanId()));
+            LogWarn("Set dst pan id %04x", mac.GetTemporaryPanId());
+            mac.SetTemporaryPanIdValid(false);
+        }
+        else{
+            LogWarn("Set dst pan id %04x", mPanIds.GetDestination());
+            IgnoreError(builder.AppendLittleEndianUint16(mPanIds.GetDestination()));
+        }
     }
 
     IgnoreError(builder.AppendMacAddress(mAddrs.mDestination));

@@ -1417,6 +1417,11 @@ private:
         kUpdateNetworkDatasets,
     };
 
+    /**
+     * Represents the IEEE 802.15.4 PAN ID.
+     */
+    typedef otPanId PanId;
+
     enum AnnounceMode : uint8_t // Used in `SendAnnounce()`
     {
         kNormalAnnounce,
@@ -2079,6 +2084,7 @@ private:
 
         void Stop(void);
         void HandleAnnounce(RxInfo &aRxInfo);
+        bool IsPanIdInList(PanId panid);
         bool IsAnnounceAttaching(void) const { return mState == kStateAnnounceAttaching; }
         void HandleAnnounceAttachSuccess(void);
         void HandleAnnounceAttachFailure(void);
@@ -2299,14 +2305,15 @@ private:
     bool       HasUnregisteredAddress(void);
     uint32_t   GetAttachStartDelay(void) const;
     void       SendAnnounce(uint8_t aChannel, AnnounceMode aMode);
-    void       SendAnnounce(uint8_t aChannel, const Ip6::Address &aDestination, AnnounceMode aMode = kNormalAnnounce);
+    void       SendAnnounce(uint8_t aChannel, const Ip6::Address &aDestination, PanId panId, AnnounceMode aMode = kNormalAnnounce);
     bool       IsNetworkDataNewer(const LeaderData &aLeaderData);
     bool       ShouldRegisterMulticastAddrsWithParent(void) const;
     Error      ProcessMessageSecurity(Crypto::AesCcm::Mode    aMode,
                                       Message                &aMessage,
                                       const Ip6::MessageInfo &aMessageInfo,
                                       uint16_t                aCmdOffset,
-                                      const SecurityHeader   &aHeader);
+                                      const SecurityHeader   &aHeader,
+                                      PanId                   aPanId);
 
 #if OPENTHREAD_CONFIG_MLE_INFORM_PREVIOUS_PARENT_ON_REATTACH
     void InformPreviousParent(void);

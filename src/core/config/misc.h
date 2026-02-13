@@ -530,7 +530,7 @@
  * Define as 1 to support Thread 1.2 Domain Unicast Address feature.
  */
 #ifndef OPENTHREAD_CONFIG_DUA_ENABLE
-#define OPENTHREAD_CONFIG_DUA_ENABLE 0
+#define OPENTHREAD_CONFIG_DUA_ENABLE 1
 #endif
 
 /**
