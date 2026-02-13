@@ -143,8 +143,8 @@ exit:
 
 bool Dataset::IsTlvValid(const Tlv &aTlv)
 {
-    bool    isValid   = true;
-    uint8_t minLength = 0;
+    bool     isValid   = true;
+    uint16_t minLength = 0;
 
     switch (aTlv.GetType())
     {
@@ -392,7 +392,7 @@ exit:
     return error;
 }
 
-Error Dataset::WriteTlv(Tlv::Type aType, const void *aValue, uint8_t aLength)
+Error Dataset::WriteTlv(Tlv::Type aType, const void *aValue, uint16_t aLength)
 {
     Error    error          = kErrorNone;
     uint16_t bytesAvailable = sizeof(mTlvs) - mLength;

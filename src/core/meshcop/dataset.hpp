@@ -366,7 +366,7 @@ public:
      * @retval kErrorNone    Successfully updated the TLV.
      * @retval kErrorNoBufs  Could not add the TLV due to insufficient buffer space.
      */
-    Error WriteTlv(Tlv::Type aType, const void *aValue, uint8_t aLength);
+    Error WriteTlv(Tlv::Type aType, const void *aValue, uint16_t aLength);
 
     /**
      * Writes a simple TLV in the Dataset.
