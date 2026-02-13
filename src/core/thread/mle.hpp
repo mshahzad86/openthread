@@ -2084,7 +2084,6 @@ private:
 
         void Stop(void);
         void HandleAnnounce(RxInfo &aRxInfo);
-        bool IsPanIdInList(PanId panid);
         bool IsAnnounceAttaching(void) const { return mState == kStateAnnounceAttaching; }
         void HandleAnnounceAttachSuccess(void);
         void HandleAnnounceAttachFailure(void);
@@ -2300,6 +2299,7 @@ private:
     void       HandleChildUpdateRequestOnChild(RxInfo &aRxInfo);
     void       HandleChildUpdateResponse(RxInfo &aRxInfo);
     void       HandleChildUpdateResponseOnChild(RxInfo &aRxInfo);
+    bool       IsPanIdInList(PanId panid);
     void       HandleDataResponse(RxInfo &aRxInfo);
     Error      HandleLeaderData(RxInfo &aRxInfo);
     bool       HasUnregisteredAddress(void);

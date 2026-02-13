@@ -3883,7 +3883,7 @@ Error Mle::TxMessage::SendTo(const Ip6::Address &aDestination)
 #if OPENTHREAD_FTD
         // Extract extended address from destination IPv6 address and find child
         Mac::ExtAddress childExtAddress;
-        aDestination.GetIid().ConvertToExtAddress(childExtAddress);
+        childExtAddress.SetFromIid(aDestination.GetIid());
         
         // Look up the child directly in the child table using extended address
         const Child *child = Get<ChildTable>().FindChild(childExtAddress, Child::kInStateAnyExceptInvalid);
@@ -5874,7 +5874,7 @@ void Mle::AnnounceHandler::HandleAnnounce(RxInfo &aRxInfo)
     timestampCompare = MeshCoP::Timestamp::Compare(timestamp, Get<MeshCoP::ActiveDatasetManager>().GetTimestamp());
 
     channelAndPanIdMatch =
-        (channel == Get<Mac::Mac>().GetPanChannel()) && ((panId == Get<Mac::Mac>().GetPanId()) || IsPanIdInList(panId));
+        (channel == Get<Mac::Mac>().GetPanChannel()) && ((panId == Get<Mac::Mac>().GetPanId()) || Get<Mle>().IsPanIdInList(panId));
 
     // Determine the action to perform.
 
@@ -5924,15 +5924,17 @@ void Mle::AnnounceHandler::HandleAnnounce(RxInfo &aRxInfo)
     case kSendAnnouceBack:
         Get<Mle>().SendAnnounce(channel);
 #if OPENTHREAD_CONFIG_MLE_SEND_UNICAST_ANNOUNCE_RESPONSE
-        SendAnnounce(channel, aRxInfo.mMessageInfo.GetPeerAddr(), Get<Mac::Mac>().GetPanId());
-        otOperationalDataset dataset;
-        otError              datasetError = otDatasetGetActive(static_cast<otInstance *>(&GetInstance()), &dataset);
-
-        if (datasetError == OT_ERROR_NONE && dataset.mComponents.mIsPanIdsPresent)
         {
-            for (uint8_t i = 0; i < dataset.mPanIds.mCount; ++i)
+            Get<Mle>().SendAnnounce(channel, aRxInfo.mMessageInfo.GetPeerAddr(), Get<Mac::Mac>().GetPanId());
+            otOperationalDataset dataset;
+            otError              datasetError = otDatasetGetActive(static_cast<otInstance *>(&GetInstance()), &dataset);
+
+            if (datasetError == OT_ERROR_NONE && dataset.mComponents.mIsPanIdsPresent)
             {
-                SendAnnounce(channel, aRxInfo.mMessageInfo.GetPeerAddr(), dataset.mPanIds.mPanIds[i]);
+                for (uint8_t i = 0; i < dataset.mPanIds.mCount; ++i)
+                {
+                    Get<Mle>().SendAnnounce(channel, aRxInfo.mMessageInfo.GetPeerAddr(), dataset.mPanIds.mPanIds[i]);
+                }
             }
         }
 #endif

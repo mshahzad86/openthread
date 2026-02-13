@@ -441,32 +441,6 @@ public:
     void SetMacKey(uint8_t aKeyIdMode, uint8_t aKeyId, const PanIdKeyMaterialMap &mPanIdKeyMaterials);
 
     /**
-     * Sets MAC keys and key index.
-     *
-     * @param[in] aKeyIdMode  MAC key ID mode.
-     * @param[in] aKeyId      The key ID.
-     * @param[in] aPrevKey    The previous MAC key.
-     * @param[in] aCurrKey    The current MAC key.
-     * @param[in] aNextKey    The next MAC key.
-     */
-    struct PanIdKeyMaterial
-    {
-        uint16_t         panId;
-        otMacKeyMaterial curMacKey;
-        otMacKeyMaterial prevMacKey;
-        otMacKeyMaterial nextMacKey;
-    };
-
-    static constexpr uint8_t kMaxPanKeys = 64;
-    using PanIdKeyMaterialMap = PanIdKeyMaterial[kMaxPanKeys];
-
-    PanIdKeyMaterialMap mPanIdKeyMaterials;
-
-    void SetMacKey(uint8_t            aKeyIdMode,
-                   uint8_t            aKeyId,
-                   const PanIdKeyMaterialMap &mPanIdKeyMaterials);
-
-    /**
      * Returns a reference to the current MAC key.
      *
      * @returns A reference to the current MAC key.

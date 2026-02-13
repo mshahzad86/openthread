@@ -1007,38 +1007,6 @@ exit:
     return;
 }
 
-void SubMac::SetMacKey(uint8_t aKeyIdMode, uint8_t aKeyId, const PanIdKeyMaterialMap &aPanIdKeyMaterials)
-{
-    switch (aKeyIdMode)
-    {
-    case Frame::kKeyIdMode0:
-    case Frame::kKeyIdMode2:
-        break;
-    case Frame::kKeyIdMode1:
-        break;
-
-    default:
-        OT_ASSERT(false);
-        break;
-    }
-
-    VerifyOrExit(!ShouldHandleTransmitSecurity());
-    ot::Radio::PanIdKeyMaterial tempKeyMaterials[kMaxPanKeys];
-
-    for (uint8_t i = 0; i < kMaxPanKeys; ++i)
-    {
-        tempKeyMaterials[i].panId      = aPanIdKeyMaterials[i].panId;
-        tempKeyMaterials[i].curMacKey  = aPanIdKeyMaterials[i].curMacKey;
-        tempKeyMaterials[i].prevMacKey = aPanIdKeyMaterials[i].prevMacKey;
-        tempKeyMaterials[i].nextMacKey = aPanIdKeyMaterials[i].nextMacKey;
-    }
-
-    Get<Radio>().SetMacKey(aKeyIdMode, aKeyId, tempKeyMaterials);
-
-exit:
-    return;
-}
-
 void SubMac::SignalFrameCounterUsed(uint32_t aFrameCounter, uint8_t aKeyId)
 {
     VerifyOrExit(aKeyId == mKeyId);

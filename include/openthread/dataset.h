@@ -291,7 +291,8 @@ typedef enum otMeshcopTlvType
 {
     OT_MESHCOP_TLV_CHANNEL                  = 0,   ///< meshcop Channel TLV
     OT_MESHCOP_TLV_PANID                    = 1,   ///< meshcop Pan Id TLV
-    OT_MESHCOP_TLV_PANIDS                   = 3,   ///< meshcop Pan Ids List TLV
+    OT_MESHCOP_TLV_PANIDS                   = 2,   ///< meshcop Pan Ids List TLV
+    OT_MESHCOP_TLV_PANKEYS                  = 3,   ///< meshcop Pan Keys List TLV
     OT_MESHCOP_TLV_EXTPANID                 = 4,   ///< meshcop Extended Pan Id TLV
     OT_MESHCOP_TLV_NETWORKNAME              = 5,   ///< meshcop Network Name TLV
     OT_MESHCOP_TLV_PSKC                     = 6,   ///< meshcop PSKc TLV
