@@ -251,6 +251,19 @@ extern "C" OT_TOOL_WEAK void otPlatRadioSetMacKeySingle(otInstance             *
     OT_UNUSED_VARIABLE(aKeyType);
 }
 
+extern "C" OT_TOOL_WEAK void otPlatRadioSetMacKeyMap(otInstance           *aInstance,
+                                                     uint8_t               aKeyIdMode,
+                                                     uint8_t               aKeyId,
+                                                     otPanIdKeyMaterialMap aPanIdKeyMaterials,
+                                                     otRadioKeyType        aKeyType)
+{
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aKeyIdMode);
+    OT_UNUSED_VARIABLE(aKeyId);
+    OT_UNUSED_VARIABLE(aPanIdKeyMaterials);
+    OT_UNUSED_VARIABLE(aKeyType);
+}
+
 extern "C" OT_TOOL_WEAK void otPlatRadioSetMacFrameCounter(otInstance *aInstance, uint32_t aMacFrameCounter)
 {
     OT_UNUSED_VARIABLE(aInstance);

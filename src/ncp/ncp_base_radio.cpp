@@ -589,7 +589,7 @@ template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_RCP_MAC_KEY_MULTIPAN>
 
     SuccessOrExit(error = mDecoder.ReadUint8(keyId));
 
-    for (int i = 0; i < 64; i++)
+    for (int i = 0; i < kMaxPanKeys; i++)
     {
         SuccessOrExit(error = mDecoder.ReadUint16(panId));
 
@@ -603,11 +603,9 @@ template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_RCP_MAC_KEY_MULTIPAN>
         VerifyOrExit(keySize == sizeof(otMacKey), error = OT_ERROR_INVALID_ARGS);
 
         panIdKeyMap[i].panId = panId;
-        memcpy(&panIdKeyMap[i].curMacKey,  curKey,  sizeof(otMacKey));
+        memcpy(&panIdKeyMap[i].curMacKey, curKey, sizeof(otMacKey));
         memcpy(&panIdKeyMap[i].prevMacKey, prevKey, sizeof(otMacKey));
         memcpy(&panIdKeyMap[i].nextMacKey, nextKey, sizeof(otMacKey));
-
-        LogCrit("panIdKeyMap[%d].panId = %d", i, panIdKeyMap[i].panId);
     }
 
     // Use the new Multi-PAN function

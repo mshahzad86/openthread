@@ -417,6 +417,28 @@ public:
                    const KeyMaterial &aPrevKey,
                    const KeyMaterial &aCurrKey,
                    const KeyMaterial &aNextKey);
+    
+    // Map of Pan ID and Key materials.
+    struct PanIdKeyMaterial
+    {
+        uint16_t         panId;
+        otMacKeyMaterial curMacKey;
+        otMacKeyMaterial prevMacKey;
+        otMacKeyMaterial nextMacKey;
+    };
+
+    static constexpr uint8_t kMaxPanKeys = 64;
+    using PanIdKeyMaterialMap            = PanIdKeyMaterial[kMaxPanKeys];
+    PanIdKeyMaterialMap mPanIdKeyMaterials;
+
+    /**
+     * Sets MAC keys and key index.
+     *
+     * @param[in] aKeyIdMode            MAC key ID mode.
+     * @param[in] aKeyId                The key ID.
+     * @param[in] mPanIdKeyMaterials    The Map of Pan ID and MAC key material.
+     */
+    void SetMacKey(uint8_t aKeyIdMode, uint8_t aKeyId, const PanIdKeyMaterialMap &mPanIdKeyMaterials);
 
     /**
      * Sets MAC keys and key index.
