@@ -559,6 +559,7 @@ void Logger::LogSpinelFrame(const uint8_t *aFrame, uint16_t aLength, bool aTx)
     {
         uint8_t      keyIdMode;
         uint8_t      keyId;
+        uint16_t     panId;
         otMacKey     prevKey;
         unsigned int prevKeyLen = sizeof(otMacKey);
         otMacKey     currKey;
@@ -567,9 +568,9 @@ void Logger::LogSpinelFrame(const uint8_t *aFrame, uint16_t aLength, bool aTx)
         unsigned int nextKeyLen = sizeof(otMacKey);
 
         unpacked = spinel_datatype_unpack(data, len,
-                                          SPINEL_DATATYPE_UINT8_S SPINEL_DATATYPE_UINT8_S SPINEL_DATATYPE_DATA_WLEN_S
+                                          SPINEL_DATATYPE_UINT8_S SPINEL_DATATYPE_UINT8_S SPINEL_DATATYPE_UINT16_S SPINEL_DATATYPE_DATA_WLEN_S
                                               SPINEL_DATATYPE_DATA_WLEN_S SPINEL_DATATYPE_DATA_WLEN_S,
-                                          &keyIdMode, &keyId, prevKey.m8, &prevKeyLen, currKey.m8, &currKeyLen,
+                                          &keyIdMode, &keyId, &panId, prevKey.m8, &prevKeyLen, currKey.m8, &currKeyLen,
                                           nextKey.m8, &nextKeyLen);
         VerifyOrExit(unpacked > 0, error = OT_ERROR_PARSE);
         start += Snprintf(start, static_cast<uint32_t>(end - start),

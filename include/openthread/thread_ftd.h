@@ -66,6 +66,7 @@ typedef struct
     uint64_t     mConnectionTime;       ///< Seconds since attach
     uint16_t     mRloc16;               ///< RLOC16
     uint16_t     mChildId;              ///< Child ID
+    uint16_t     mPanId;                ///< PAN ID
     uint8_t      mNetworkDataVersion;   ///< Network Data Version
     uint8_t      mLinkQualityIn;        ///< Link Quality In
     int8_t       mAverageRssi;          ///< Average RSSI

@@ -355,6 +355,22 @@ otError otLinkRawSetMacKey(otInstance     *aInstance,
                            const otMacKey *aNextKey);
 
 /**
+ * Update Multi-PAN MAC keys and key index.
+ *
+ * @param[in]   aInstance            A pointer to an OpenThread instance.
+ * @param[in]   aKeyIdMode           The key ID mode.
+ * @param[in]   aKeyId               The key index.
+ * @param[in]   aPanIdKeyMap         Array of PAN ID keys for Multi-PAN support.
+ *
+ * @retval OT_ERROR_NONE             If successful.
+ * @retval OT_ERROR_INVALID_STATE    If the raw link-layer isn't enabled.
+ */
+otError otLinkRawSetMacKeyMultiPan(otInstance             *aInstance,
+                                   uint8_t                 aKeyIdMode,
+                                   uint8_t                 aKeyId,
+                                   const otPanIdKeyMap     aPanIdKeyMap);
+                                   
+/**
  * Sets the current MAC frame counter value.
  *
  * Always sets the MAC counter to the new given value @p aMacFrameCounter independent of the current

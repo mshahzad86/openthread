@@ -49,6 +49,17 @@
 namespace ot {
 namespace Spinel {
 
+struct PanIdKey
+{
+    uint16_t    panId;
+    otMacKey    curMacKey;
+    otMacKey    prevMacKey;
+    otMacKey    nextMacKey;
+};
+
+static constexpr uint8_t kMaxPanKeys = 64;
+using PanIdKeyMap = PanIdKey[kMaxPanKeys];
+
 struct RadioSpinelCallbacks
 {
     /**
@@ -729,6 +740,10 @@ public:
                       const otMacKeyMaterial *aCurrKey,
                       const otMacKeyMaterial *aNextKey);
 
+    otError SetMacKey(uint8_t                 aKeyIdMode,
+                      uint8_t                 aKeyId,
+                      otPanIdKeyMaterialMap   aPanIdKeyMaterials);
+
     /**
      * Sets the current MAC Frame Counter value.
      *
@@ -1203,6 +1218,11 @@ private:
                       const otMacKey &aPrevKey,
                       const otMacKey &aCurrKey,
                       const otMacKey &NextKey);
+
+    otError SetMacKey(uint8_t         aKeyIdMode,
+                      uint8_t         aKeyId,
+                      const PanIdKeyMap aPanIdKeyMap);
+                      
 #if OPENTHREAD_CONFIG_PLATFORM_KEY_REFERENCES_ENABLE
     static otError ReadMacKey(const otMacKeyMaterial &aKeyMaterial, otMacKey &aKey);
 #endif

@@ -30,9 +30,18 @@
  * @file
  *   This file implements common methods for manipulating MeshCoP Datasets.
  */
-
+#include "openthread-core-config.h"
 #include "dataset.hpp"
+#include "common/code_utils.hpp"
 
+
+#include "common/debug.hpp"
+#include "common/log.hpp"
+#include "common/random.hpp"
+#include "common/string.hpp"
+#include "mac/mac_types.hpp"
+#include "meshcop/meshcop_tlvs.hpp"
+#include "radio/radio.hpp"
 #include "instance/instance.hpp"
 
 namespace ot {
@@ -67,6 +76,13 @@ Error Dataset::Info::GenerateRandom(Instance &aInstance)
     mChannelMask                    = supportedChannels.GetMask();
     mWakeupChannel                  = supportedChannels.ChooseRandomChannel();
     mPanId                          = Mac::GenerateRandomPanId();
+    // Initialize PAN IDs list with the primary PAN ID
+    mPanIds.mCount = 1;
+    mPanIds.mPanIds[0] = mPanId;
+
+   // Initialize PAN Keys list with the primary PAN Key
+    mPanKeys.mCount = 1;
+    SuccessOrExit(error = AsCoreType(&mPanKeys.mPanKeys[0]).GenerateRandom());
     AsCoreType(&mSecurityPolicy).SetToDefault();
 
     SuccessOrExit(error = AsCoreType(&mNetworkKey).GenerateRandom());
@@ -82,11 +98,13 @@ Error Dataset::Info::GenerateRandom(Instance &aInstance)
     mComponents.mIsExtendedPanIdPresent   = true;
     mComponents.mIsMeshLocalPrefixPresent = true;
     mComponents.mIsPanIdPresent           = true;
+    mComponents.mIsPanIdsPresent          = true;
     mComponents.mIsChannelPresent         = true;
     mComponents.mIsWakeupChannelPresent   = true;
     mComponents.mIsPskcPresent            = true;
     mComponents.mIsSecurityPolicyPresent  = true;
     mComponents.mIsChannelMaskPresent     = true;
+    mComponents.mIsPanKeysPresent         = true;
 
 exit:
     return error;
@@ -125,8 +143,8 @@ exit:
 
 bool Dataset::IsTlvValid(const Tlv &aTlv)
 {
-    bool    isValid   = true;
-    uint8_t minLength = 0;
+    bool     isValid   = true;
+    uint16_t minLength = 0;
 
     switch (aTlv.GetType())
     {
@@ -141,6 +159,12 @@ bool Dataset::IsTlvValid(const Tlv &aTlv)
         break;
     case Tlv::kPanId:
         minLength = sizeof(PanIdTlv::UintValueType);
+        break;
+    case Tlv::kPanIds:
+        minLength = sizeof(PanIdsTlv::ValueType);
+        break;
+    case Tlv::kPanKeys:
+        minLength = sizeof(PanKeysTlv::ValueType);
         break;
     case Tlv::kExtendedPanId:
         minLength = sizeof(ExtendedPanIdTlv::ValueType);
@@ -289,6 +313,14 @@ void Dataset::ConvertTo(Info &aDatasetInfo) const
             aDatasetInfo.Set<kPanId>(cur->ReadValueAs<PanIdTlv>());
             break;
 
+        case Tlv::kPanIds:
+            aDatasetInfo.Set<kPanIds>(cur->ReadValueAs<PanIdsTlv>());
+            break;
+
+        case Tlv::kPanKeys:
+            aDatasetInfo.Set<kPanKeys>(cur->ReadValueAs<PanKeysTlv>());
+            break;
+
         case Tlv::kPendingTimestamp:
             aDatasetInfo.Set<kPendingTimestamp>(cur->ReadValueAs<PendingTimestampTlv>());
             break;
@@ -360,7 +392,7 @@ exit:
     return error;
 }
 
-Error Dataset::WriteTlv(Tlv::Type aType, const void *aValue, uint8_t aLength)
+Error Dataset::WriteTlv(Tlv::Type aType, const void *aValue, uint16_t aLength)
 {
     Error    error          = kErrorNone;
     uint16_t bytesAvailable = sizeof(mTlvs) - mLength;
@@ -494,6 +526,16 @@ Error Dataset::WriteTlvsFrom(const Dataset::Info &aDatasetInfo)
         SuccessOrExit(error = Write<PanIdTlv>(aDatasetInfo.Get<kPanId>()));
     }
 
+    if (aDatasetInfo.IsPresent<kPanIds>())
+    {
+        SuccessOrExit(error = Write<PanIdsTlv>(aDatasetInfo.Get<kPanIds>()));
+    }
+
+    if (aDatasetInfo.IsPresent<kPanKeys>())
+    {
+        SuccessOrExit(error = Write<PanKeysTlv>(aDatasetInfo.Get<kPanKeys>()));
+    }
+    
     if (aDatasetInfo.IsPresent<kPskc>())
     {
         SuccessOrExit(error = Write<PskcTlv>(aDatasetInfo.Get<kPskc>()));

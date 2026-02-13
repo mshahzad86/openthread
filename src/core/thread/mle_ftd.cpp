@@ -1417,6 +1417,7 @@ void Mle::HandleParentRequest(RxInfo &aRxInfo)
     DeviceMode         mode;
     uint32_t           delay;
     ParentResponseInfo info;
+    Mac::PanId         panId;
 
     Log(kMessageReceive, kTypeParentRequest, aRxInfo.mMessageInfo.GetPeerAddr());
 
@@ -1452,6 +1453,9 @@ void Mle::HandleParentRequest(RxInfo &aRxInfo)
     }
 
     SuccessOrExit(error = aRxInfo.mMessage.ReadChallengeTlv(info.mRxChallenge));
+    
+    // Get the PAN ID from the message
+    panId = aRxInfo.mMessage.GetPanId();
 
     child = mChildTable.FindChild(info.mChildExtAddress, Child::kInStateAnyExceptInvalid);
 
@@ -1461,6 +1465,7 @@ void Mle::HandleParentRequest(RxInfo &aRxInfo)
 
         InitNeighbor(*child, aRxInfo);
         child->SetState(Neighbor::kStateParentRequest);
+        child->SetPanId(panId); // Store the PAN ID for this child
 #if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
         child->SetTimeSyncEnabled(Tlv::Find<TimeRequestTlv>(aRxInfo.mMessage, nullptr, 0) == kErrorNone);
 #endif

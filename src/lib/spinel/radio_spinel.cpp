@@ -877,6 +877,23 @@ exit:
 
 otError RadioSpinel::SetMacKey(uint8_t                 aKeyIdMode,
                                uint8_t                 aKeyId,
+                               otPanIdKeyMaterialMap   aPanIdKeyMaterials)
+{
+    PanIdKeyMap panIdKeyMap;
+
+    for (uint8_t i = 0; i < kMaxPanKeys; ++i)
+    {
+        panIdKeyMap[i].panId      = aPanIdKeyMaterials[i].panId;
+        panIdKeyMap[i].curMacKey  = aPanIdKeyMaterials[i].curMacKey.mKeyMaterial.mKey;
+        panIdKeyMap[i].prevMacKey = aPanIdKeyMaterials[i].prevMacKey.mKeyMaterial.mKey;
+        panIdKeyMap[i].nextMacKey = aPanIdKeyMaterials[i].nextMacKey.mKeyMaterial.mKey;
+    }
+
+    return SetMacKey(aKeyIdMode, aKeyId, panIdKeyMap);
+}
+
+otError RadioSpinel::SetMacKey(uint8_t                 aKeyIdMode,
+                               uint8_t                 aKeyId,
                                const otMacKeyMaterial *aPrevKey,
                                const otMacKeyMaterial *aCurrKey,
                                const otMacKeyMaterial *aNextKey)
@@ -894,11 +911,12 @@ otError RadioSpinel::SetMacKey(uint8_t         aKeyIdMode,
                                const otMacKey &aNextKey)
 {
     otError error;
+    uint8_t panId = 0x5A;
 
     SuccessOrExit(error = Set(SPINEL_PROP_RCP_MAC_KEY,
-                              SPINEL_DATATYPE_UINT8_S SPINEL_DATATYPE_UINT8_S SPINEL_DATATYPE_DATA_WLEN_S
+                              SPINEL_DATATYPE_UINT8_S SPINEL_DATATYPE_UINT8_S SPINEL_DATATYPE_UINT8_S SPINEL_DATATYPE_DATA_WLEN_S
                                   SPINEL_DATATYPE_DATA_WLEN_S SPINEL_DATATYPE_DATA_WLEN_S,
-                              aKeyIdMode, aKeyId, aPrevKey.m8, sizeof(aPrevKey), aCurrKey.m8, sizeof(aCurrKey),
+                              aKeyIdMode, aKeyId, panId, aPrevKey.m8, sizeof(aPrevKey), aCurrKey.m8, sizeof(aCurrKey),
                               aNextKey.m8, sizeof(aNextKey)));
 
 #if OPENTHREAD_SPINEL_CONFIG_RCP_RESTORATION_MAX_COUNT > 0
@@ -913,6 +931,132 @@ otError RadioSpinel::SetMacKey(uint8_t         aKeyIdMode,
 #endif
 
 exit:
+    return error;
+}
+
+otError RadioSpinel::SetMacKey(uint8_t aKeyIdMode,
+                               uint8_t aKeyId,
+                               const PanIdKeyMap panIdKeyMap)
+{
+    otError error;
+
+    // We define the format for one PAN entry: PANID (UINT16) + 3 Keys (DATA_WLEN)
+    #define SPINEL_PAN_ENTRY_FORMAT \
+        SPINEL_DATATYPE_UINT16_S \
+        SPINEL_DATATYPE_DATA_WLEN_S \
+        SPINEL_DATATYPE_DATA_WLEN_S \
+        SPINEL_DATATYPE_DATA_WLEN_S
+
+    SuccessOrExit(error = Set(SPINEL_PROP_RCP_MAC_KEY_MULTIPAN,
+        // Header: KeyIdMode and KeyId
+        SPINEL_DATATYPE_UINT8_S SPINEL_DATATYPE_UINT8_S
+        // 64 repetitions of the PAN entry format
+        SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT
+        SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT
+        SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT
+        SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT
+        SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT
+        SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT
+        SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT
+        SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT
+        SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT
+        SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT
+        SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT
+        SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT
+        SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT
+        SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT
+        SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT
+        SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT SPINEL_PAN_ENTRY_FORMAT,
+        
+        aKeyIdMode, aKeyId,
+        // Mapping all 64 entries
+        panIdKeyMap[0].panId, panIdKeyMap[0].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[0].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[0].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[1].panId, panIdKeyMap[1].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[1].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[1].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[2].panId, panIdKeyMap[2].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[2].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[2].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[3].panId, panIdKeyMap[3].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[3].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[3].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[4].panId, panIdKeyMap[4].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[4].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[4].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[5].panId, panIdKeyMap[5].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[5].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[5].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[6].panId, panIdKeyMap[6].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[6].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[6].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[7].panId, panIdKeyMap[7].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[7].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[7].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[8].panId, panIdKeyMap[8].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[8].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[8].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[9].panId, panIdKeyMap[9].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[9].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[9].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[10].panId, panIdKeyMap[10].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[10].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[10].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[11].panId, panIdKeyMap[11].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[11].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[11].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[12].panId, panIdKeyMap[12].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[12].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[12].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[13].panId, panIdKeyMap[13].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[13].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[13].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[14].panId, panIdKeyMap[14].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[14].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[14].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[15].panId, panIdKeyMap[15].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[15].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[15].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[16].panId, panIdKeyMap[16].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[16].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[16].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[17].panId, panIdKeyMap[17].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[17].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[17].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[18].panId, panIdKeyMap[18].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[18].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[18].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[19].panId, panIdKeyMap[19].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[19].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[19].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[20].panId, panIdKeyMap[20].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[20].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[20].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[21].panId, panIdKeyMap[21].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[21].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[21].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[22].panId, panIdKeyMap[22].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[22].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[22].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[23].panId, panIdKeyMap[23].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[23].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[23].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[24].panId, panIdKeyMap[24].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[24].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[24].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[25].panId, panIdKeyMap[25].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[25].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[25].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[26].panId, panIdKeyMap[26].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[26].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[26].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[27].panId, panIdKeyMap[27].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[27].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[27].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[28].panId, panIdKeyMap[28].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[28].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[28].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[29].panId, panIdKeyMap[29].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[29].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[29].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[30].panId, panIdKeyMap[30].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[30].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[30].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[31].panId, panIdKeyMap[31].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[31].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[31].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[32].panId, panIdKeyMap[32].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[32].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[32].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[33].panId, panIdKeyMap[33].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[33].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[33].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[34].panId, panIdKeyMap[34].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[34].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[34].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[35].panId, panIdKeyMap[35].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[35].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[35].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[36].panId, panIdKeyMap[36].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[36].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[36].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[37].panId, panIdKeyMap[37].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[37].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[37].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[38].panId, panIdKeyMap[38].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[38].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[38].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[39].panId, panIdKeyMap[39].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[39].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[39].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[40].panId, panIdKeyMap[40].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[40].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[40].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[41].panId, panIdKeyMap[41].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[41].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[41].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[42].panId, panIdKeyMap[42].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[42].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[42].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[43].panId, panIdKeyMap[43].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[43].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[43].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[44].panId, panIdKeyMap[44].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[44].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[44].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[45].panId, panIdKeyMap[45].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[45].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[45].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[46].panId, panIdKeyMap[46].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[46].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[46].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[47].panId, panIdKeyMap[47].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[47].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[47].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[48].panId, panIdKeyMap[48].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[48].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[48].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[49].panId, panIdKeyMap[49].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[49].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[49].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[50].panId, panIdKeyMap[50].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[50].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[50].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[51].panId, panIdKeyMap[51].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[51].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[51].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[52].panId, panIdKeyMap[52].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[52].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[52].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[53].panId, panIdKeyMap[53].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[53].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[53].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[54].panId, panIdKeyMap[54].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[54].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[54].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[55].panId, panIdKeyMap[55].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[55].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[55].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[56].panId, panIdKeyMap[56].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[56].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[56].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[57].panId, panIdKeyMap[57].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[57].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[57].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[58].panId, panIdKeyMap[58].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[58].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[58].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[59].panId, panIdKeyMap[59].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[59].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[59].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[60].panId, panIdKeyMap[60].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[60].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[60].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[61].panId, panIdKeyMap[61].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[61].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[61].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[62].panId, panIdKeyMap[62].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[62].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[62].nextMacKey.m8, sizeof(otMacKey),
+        panIdKeyMap[63].panId, panIdKeyMap[63].prevMacKey.m8, sizeof(otMacKey), panIdKeyMap[63].curMacKey.m8, sizeof(otMacKey), panIdKeyMap[63].nextMacKey.m8, sizeof(otMacKey))
+    );
+
+    #undef SPINEL_PAN_ENTRY_FORMAT
+
+#if OPENTHREAD_SPINEL_CONFIG_RCP_RESTORATION_MAX_COUNT > 0
+    mKeyIdMode = aKeyIdMode;
+    mKeyId     = aKeyId;
+
+    // Standard RadioSpinel typically stores only one set of keys for restoration.
+    // If your hardware supports 64 keys, you would need to extend the mPrevKey/mCurrKey/mNextKey
+    // members to be arrays within the class definition. 
+    mPrevKey = panIdKeyMap[0].prevMacKey;
+    mCurrKey = panIdKeyMap[0].curMacKey;
+    mNextKey = panIdKeyMap[0].nextMacKey;
+
+    mMacKeySet = true;
+#endif
+
+exit:
+    if (error != OT_ERROR_NONE)
+    {
+        LogCrit("##### Failed to set 64 MAC keys: %d", error);
+    }
     return error;
 }
 

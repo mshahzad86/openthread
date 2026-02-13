@@ -229,6 +229,61 @@ typedef enum
     OT_KEY_TYPE_KEY_REF     = 1, ///< Use Reference to Key.
 } otRadioKeyType;
 
+/** 
+ * Holds PAN ID and its associated MAC key materials (current, previous, next). 
+ */
+typedef struct otPanIdKeyMaterial
+{
+    uint16_t         panId;
+    otMacKeyMaterial curMacKey;
+    otMacKeyMaterial prevMacKey;
+    otMacKeyMaterial nextMacKey;
+} otPanIdKeyMaterial;
+
+/** 
+ * Holds PAN ID and its active MAC keys (current, previous, next). 
+ */
+typedef struct otPanIdKey
+{
+    uint16_t    panId;
+    otMacKey    curMacKey;
+    otMacKey    prevMacKey;
+    otMacKey    nextMacKey;
+} otPanIdKey;
+
+#ifdef __cplusplus
+/** 
+ * Maximum number of PAN key entries supported. 
+ */
+static constexpr uint8_t kMaxPanKeys = 64;
+
+/** 
+ * Fixed-size array type for storing PAN key materials. 
+ */
+using otPanIdKeyMaterialMap = otPanIdKeyMaterial[kMaxPanKeys];
+
+/** 
+ * Fixed-size array type for storing PAN keys. 
+ */
+using otPanIdKeyMap = otPanIdKey[kMaxPanKeys];
+#else
+/** 
+ * Maximum number of PAN key entries supported. 
+ */
+#define kMaxPanKeys 64
+
+/** 
+ * Fixed-size array type for storing PAN key materials. 
+ */
+typedef otPanIdKeyMaterial otPanIdKeyMaterialMap[kMaxPanKeys];
+
+/** 
+ * Fixed-size array type for storing PAN keys. 
+ */
+typedef otPanIdKey otPanIdKeyMap[kMaxPanKeys];
+#endif
+
+
 /**
  * Represents the IEEE 802.15.4 Header IE (Information Element) related information of a radio frame.
  */
@@ -716,13 +771,34 @@ void otPlatRadioSetRxOnWhenIdle(otInstance *aInstance, bool aEnable);
  * @param[in]   aNextKey     A pointer to the next MAC key.
  * @param[in]   aKeyType     Key Type used.
  */
-void otPlatRadioSetMacKey(otInstance             *aInstance,
+void otPlatRadioSetMacKeySingle(otInstance             *aInstance,
                           uint8_t                 aKeyIdMode,
                           uint8_t                 aKeyId,
                           const otMacKeyMaterial *aPrevKey,
                           const otMacKeyMaterial *aCurrKey,
                           const otMacKeyMaterial *aNextKey,
                           otRadioKeyType          aKeyType);
+
+/**
+ * Update Map of Pan Id, MAC keys and key index
+ *
+ * Is used when radio provides OT_RADIO_CAPS_TRANSMIT_SEC capability.
+ *
+ * The radio platform should reset the current security MAC frame counter tracked by the radio on this call. While this
+ * is highly recommended, the OpenThread stack, as a safeguard, will also reset the frame counter using the
+ * `otPlatRadioSetMacFrameCounter()` before calling this API.
+ *
+ * @param[in]   aInstance              A pointer to an OpenThread instance.
+ * @param[in]   aKeyIdMode             The key ID mode.
+ * @param[in]   aKeyId                 Current MAC key index.
+ * @param[in]   aPanIdKeyMaterials     A pointer to the map of Pan ID and MAC key.
+ * @param[in]   aKeyType               Key Type used.
+ */
+void otPlatRadioSetMacKeyMap(otInstance            *aInstance,
+                             uint8_t               aKeyIdMode,
+                             uint8_t               aKeyId,
+                             otPanIdKeyMaterialMap aPanIdKeyMaterials,
+                             otRadioKeyType        aKeyType);
 
 /**
  * Sets the current MAC frame counter value.

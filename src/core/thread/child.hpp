@@ -364,6 +364,20 @@ public:
     bool HasAnyMlrToRegisterAddress(void) const { return !mMlrToRegisterSet.IsEmpty(); }
 #endif // OPENTHREAD_CONFIG_TMF_PROXY_MLR_ENABLE
 
+    /**
+     * Gets the PAN ID of this child device.
+     *
+     * @returns The PAN ID of the child device.
+     */
+    Mac::PanId GetPanId(void) const { return mPanId; }
+
+    /**
+     * Sets the PAN ID of this child device.
+     *
+     * @param[in] aPanId  The PAN ID to set.
+     */
+    void SetPanId(Mac::PanId aPanId) { mPanId = aPanId; }
+
 private:
     typedef BitSet<kNumIp6Addresses> ChildIp6AddressSet;
 
@@ -386,6 +400,7 @@ private:
 
     uint16_t mSupervisionInterval;
     uint16_t mSecondsSinceSupervision;
+    Mac::PanId mPanId; ///< The PAN ID of this child device
 };
 
 DefineCoreType(otChildInfo, Child::Info);

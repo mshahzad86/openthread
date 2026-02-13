@@ -417,6 +417,28 @@ public:
                    const KeyMaterial &aPrevKey,
                    const KeyMaterial &aCurrKey,
                    const KeyMaterial &aNextKey);
+    
+    // Map of Pan ID and Key materials.
+    struct PanIdKeyMaterial
+    {
+        uint16_t         panId;
+        otMacKeyMaterial curMacKey;
+        otMacKeyMaterial prevMacKey;
+        otMacKeyMaterial nextMacKey;
+    };
+
+    static constexpr uint8_t kMaxPanKeys = 64;
+    using PanIdKeyMaterialMap            = PanIdKeyMaterial[kMaxPanKeys];
+    PanIdKeyMaterialMap mPanIdKeyMaterials;
+
+    /**
+     * Sets MAC keys and key index.
+     *
+     * @param[in] aKeyIdMode            MAC key ID mode.
+     * @param[in] aKeyId                The key ID.
+     * @param[in] mPanIdKeyMaterials    The Map of Pan ID and MAC key material.
+     */
+    void SetMacKey(uint8_t aKeyIdMode, uint8_t aKeyId, const PanIdKeyMaterialMap &mPanIdKeyMaterials);
 
     /**
      * Returns a reference to the current MAC key.
@@ -440,6 +462,38 @@ public:
     const KeyMaterial &GetNextMacKey(void) const { return mNextKey; }
 
     /**
+     * Returns a reference to the current MAC key for a specific PAN ID.
+     *
+     * @param[in] aPanId  The PAN ID to look up.
+     * @returns A reference to the current MAC key for the specified PAN ID.
+     */
+    const KeyMaterial &GetCurrentMacKeyForPanId(uint16_t aPanId) const;
+
+    /**
+     * Returns a reference to the previous MAC key for a specific PAN ID.
+     *
+     * @param[in] aPanId  The PAN ID to look up.
+     * @returns A reference to the previous MAC key for the specified PAN ID.
+     */
+    const KeyMaterial &GetPreviousMacKeyForPanId(uint16_t aPanId) const;
+
+    /**
+     * Returns a reference to the next MAC key for a specific PAN ID.
+     *
+     * @param[in] aPanId  The PAN ID to look up.
+     * @returns A reference to the next MAC key for the specified PAN ID.
+     */
+    const KeyMaterial &GetNextMacKeyForPanId(uint16_t aPanId) const;
+
+    /**
+     * Checks if a PAN ID exists in the key materials map.
+     *
+     * @param[in] aPanId  The PAN ID to check.
+     * @returns True if the PAN ID exists in the map, false otherwise.
+     */
+    bool HasPanIdKeyMaterial(uint16_t aPanId) const;
+
+    /**
      * Clears the stored MAC keys.
      */
     void ClearMacKeys(void)
@@ -449,6 +503,20 @@ public:
         mNextKey.Clear();
     }
 
+    /**
+     * Clears the stored PAN ID key materials map.
+     */
+    void ClearPanIdKeyMaterials(void)
+    {
+        for (uint8_t i = 0; i < kMaxPanKeys; ++i)
+        {
+            mPanIdKeyMaterials[i].panId = 0;
+            mPanIdKeyMaterials[i].curMacKey.mKeyMaterial.mKeyRef = 0;
+            mPanIdKeyMaterials[i].prevMacKey.mKeyMaterial.mKeyRef = 0;
+            mPanIdKeyMaterials[i].nextMacKey.mKeyMaterial.mKeyRef = 0;
+        }
+    }
+    
     /**
      * Returns the current MAC frame counter value.
      *
