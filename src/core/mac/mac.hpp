@@ -209,6 +209,20 @@ public:
      */
     void RequestDirectFrameTransmission(void);
 
+    /** Gets the temporary PAN ID. */
+    PanId GetTemporaryPanId(void) const { return mPanIdTemporary; }
+
+    /** Sets the temporary PAN ID. */
+    void SetTemporaryPanId(PanId aPanId) { mPanIdTemporary = aPanId; }
+
+    /** Indicates whether the temporary PAN ID is valid. */
+    bool GetTemporaryPanIdValid(void) const { return mPanIdTemporaryValid; }
+
+    /** Sets whether the temporary PAN ID is valid. */
+    void SetTemporaryPanIdValid(bool aValid) { mPanIdTemporaryValid = aValid; }
+
+    /** Checks if a PAN ID exists in the list. */
+    bool IsPanIdInList(PanId panid);
 #if OPENTHREAD_FTD
     /**
      * Requests an indirect data frame transmission.
@@ -906,6 +920,8 @@ private:
     uint16_t    mScanDuration;
     ChannelMask mScanChannelMask;
     uint8_t     mMaxFrameRetriesDirect;
+    PanId       mPanIdTemporary;
+    bool        mPanIdTemporaryValid : 1;
 #if OPENTHREAD_FTD
     uint8_t mMaxFrameRetriesIndirect;
 #endif

@@ -349,6 +349,28 @@ public:
      */
     const Mle::KeyMaterial &GetCurrentMleKey(void) const { return mMleKey; }
 
+    static constexpr uint8_t kMaxPanKeys = 64;
+
+    /**
+     * Returns the current MLE key Material.
+     *
+     * @returns The current MLE key.
+     */
+    const Mle::KeyMaterial &GetMleKeyForPanId(uint16_t aPanId) const
+    {
+        for (uint8_t i = 0; i < kMaxPanKeys; ++i)
+        {
+            if (mPanIdKeyMaterials[i].panId == aPanId)
+            {
+                return mPanIdKeyMaterials[i].mleKey;
+            }
+        }
+
+        // If not found, assert or fallback
+        OT_ASSERT(false);        // Will halt in debug builds
+        return mMleKey;          // Safe fallback to current key
+    }
+
     /**
      * Returns a temporary MLE key Material computed from the given key sequence.
      *
@@ -525,6 +547,35 @@ public:
      */
     void UpdateKeyMaterial(void);
 
+    // Multi-PAN: setters for PAN ID and PAN Keys provided via Dataset
+    /**
+     * Handles setting of PAN IDs from Dataset.
+     */
+    void SetPanIds(const otPanIdList &aPanIds)
+    {
+        mPanIdCount = aPanIds.mCount;
+        for (uint8_t i = 0; i < mPanIdCount && i < kMaxPanKeys; ++i)
+        {
+            mPanIds[i] = aPanIds.mPanIds[i];
+        }
+        CheckForKeyRotation();
+        UpdateKeyMaterial();
+    }
+
+    /**
+     * Handles setting of PAN Keys from Dataset.
+     */
+    void SetPanKeys(const otPanKeyList &aPanKeys)
+    {
+        mPanKeyCount = aPanKeys.mCount;
+        for (uint8_t i = 0; i < mPanKeyCount && i < kMaxPanKeys; ++i)
+        {
+            memcpy(mPanKeys[i].m8, aPanKeys.mPanKeys[i].m8, NetworkKey::kSize);
+        }
+        CheckForKeyRotation();
+        UpdateKeyMaterial();
+    }  
+
     /**
      * Handles MAC frame counter changes (callback from `SubMac` for 15.4 security frame change).
      *
@@ -573,6 +624,15 @@ private:
 
     void ComputeKeys(uint32_t aKeySequence, HashKeys &aHashKeys) const;
 
+    struct PanIdHashKeyPair
+    {
+        uint16_t panId;
+        HashKeys keys;
+    };
+
+    using PanIdHashKeyMap = PanIdHashKeyPair[kMaxPanKeys];
+    void ComputeKeys(uint32_t aKeySequence, PanIdHashKeyMap &aKeyMap) const;
+
 #if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
     void ComputeTrelKey(uint32_t aKeySequence, Mac::Key &aKey) const;
 #endif
@@ -607,6 +667,25 @@ private:
     Mle::KeyMaterial mMleKey;
     Mle::KeyMaterial mTemporaryMleKey;
 
+    struct PanIdKeyMaterial
+    {
+        uint16_t         panId;
+        Mle::KeyMaterial mleKey;
+        otMacKeyMaterial curMacKey;
+        otMacKeyMaterial prevMacKey;
+        otMacKeyMaterial nextMacKey;
+    };
+
+    using PanIdKeyMaterialMap = PanIdKeyMaterial[kMaxPanKeys];
+
+    PanIdKeyMaterialMap mPanIdKeyMaterials;
+
+    // Multi-PAN: configured PAN IDs and Keys (from Dataset)
+    uint8_t    mPanIdCount = 0;
+    uint8_t    mPanKeyCount = 0;
+    uint16_t   mPanIds[kMaxPanKeys] = {};
+    NetworkKey mPanKeys[kMaxPanKeys];
+    
 #if OPENTHREAD_CONFIG_WAKEUP_END_DEVICE_ENABLE
     Mle::KeyMaterial mTemporaryMacKey;
 #endif

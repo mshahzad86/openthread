@@ -221,6 +221,14 @@ Error DatasetManager::ApplyConfiguration(const Dataset &aDataset) const
         case Tlv::kNetworkKey:
             Get<KeyManager>().SetNetworkKey(cur->ReadValueAs<NetworkKeyTlv>());
             break;
+            
+        case Tlv::kPanIds:
+            Get<KeyManager>().SetPanIds(cur->ReadValueAs<PanIdsTlv>());
+            break;
+
+        case Tlv::kPanKeys:
+            Get<KeyManager>().SetPanKeys(cur->ReadValueAs<PanKeysTlv>());
+            break;
 
 #if OPENTHREAD_FTD
         case Tlv::kPskc:

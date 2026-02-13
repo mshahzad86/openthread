@@ -39,6 +39,8 @@
 #include "crypto/sha256.hpp"
 #include "instance/instance.hpp"
 #include "utils/static_counter.hpp"
+#include "thread/child_table.hpp"
+#include "thread/child.hpp"
 
 namespace ot {
 namespace Mac {
@@ -1578,6 +1580,10 @@ Error Mac::ProcessReceiveSecurity(RxFrame &aFrame, const Address &aSrcAddr, Neig
     uint32_t           keySequence = 0;
     const KeyMaterial *macKey;
     const ExtAddress  *extAddress;
+    PanId              panId;
+#if OPENTHREAD_FTD
+    const Child *child = nullptr;
+#endif
 
     VerifyOrExit(aFrame.GetSecurityEnabled(), error = kErrorNone);
 
@@ -1602,20 +1608,42 @@ Error Mac::ProcessReceiveSecurity(RxFrame &aFrame, const Address &aSrcAddr, Neig
         IgnoreError(aFrame.GetKeyId(keyid));
         keyid--;
 
+        // Determine PAN ID based on source address (similar to ProcessEnhAckSecurity)
+#if OPENTHREAD_FTD
+        // Look up the child in the child table using extended address
+        child = Get<ChildTable>().FindChild(aSrcAddr.GetExtended(), Child::kInStateAnyExceptInvalid);
+        if (child != nullptr)
+        {
+            // If it's a child device, use its PAN ID
+            panId = child->GetPanId();
+        }
+        else
+        {
+            // If child not found, use the router's PAN ID
+            panId = GetPanId();
+        }
+#else
+        // For MTD builds, use the router's PAN ID
+        panId = GetPanId();
+#endif
+
         if (keyid == (keyManager.GetCurrentKeySequence() & 0x7f))
         {
             keySequence = keyManager.GetCurrentKeySequence();
-            macKey      = mLinks.GetCurrentMacKey(aFrame);
+            //macKey      = mLinks.GetCurrentMacKey(aFrame);
+            macKey = &mLinks.GetSubMac().GetCurrentMacKeyForPanId(panId);
         }
         else if (keyid == ((keyManager.GetCurrentKeySequence() - 1) & 0x7f))
         {
             keySequence = keyManager.GetCurrentKeySequence() - 1;
-            macKey      = mLinks.GetTemporaryMacKey(aFrame, keySequence);
+            // macKey      = mLinks.GetTemporaryMacKey(aFrame, keySequence);
+            macKey = &mLinks.GetSubMac().GetPreviousMacKeyForPanId(panId);
         }
         else if (keyid == ((keyManager.GetCurrentKeySequence() + 1) & 0x7f))
         {
             keySequence = keyManager.GetCurrentKeySequence() + 1;
-            macKey      = mLinks.GetTemporaryMacKey(aFrame, keySequence);
+            // macKey      = mLinks.GetTemporaryMacKey(aFrame, keySequence);
+            macKey = &mLinks.GetSubMac().GetNextMacKeyForPanId(panId);
         }
         else
         {
@@ -1735,6 +1763,10 @@ Error Mac::ProcessEnhAckSecurity(TxFrame &aTxFrame, RxFrame &aAckFrame)
     Neighbor          *neighbor   = nullptr;
     KeyManager        &keyManager = Get<KeyManager>();
     const KeyMaterial *macKey;
+    PanId              panId;
+#if OPENTHREAD_FTD
+    const Child *child = nullptr;
+#endif
 
     VerifyOrExit(aAckFrame.GetSecurityEnabled(), error = kErrorNone);
     VerifyOrExit(aAckFrame.IsVersion2015());
@@ -1779,19 +1811,41 @@ Error Mac::ProcessEnhAckSecurity(TxFrame &aTxFrame, RxFrame &aAckFrame)
 
     VerifyOrExit(srcAddr.IsExtended() && neighbor != nullptr);
 
+    // Determine PAN ID based on source address (similar to your MLE approach)
+#if OPENTHREAD_FTD
+    // Look up the child in the child table using extended address
+    child = Get<ChildTable>().FindChild(srcAddr.GetExtended(), Child::kInStateAnyExceptInvalid);
+    if (child != nullptr)
+    {
+        // If it's a child device, use its PAN ID
+        panId = child->GetPanId();
+    }
+    else
+    {
+        // If child not found, use the router's PAN ID
+        panId = GetPanId();
+    }
+#else
+    // For MTD builds, use the router's PAN ID
+    panId = GetPanId();
+#endif
+
     ackKeyId--;
 
     if (ackKeyId == (keyManager.GetCurrentKeySequence() & 0x7f))
     {
-        macKey = &mLinks.GetSubMac().GetCurrentMacKey();
+        // macKey = &mLinks.GetSubMac().GetCurrentMacKey();
+        macKey = &mLinks.GetSubMac().GetCurrentMacKeyForPanId(panId);
     }
     else if (ackKeyId == ((keyManager.GetCurrentKeySequence() - 1) & 0x7f))
     {
-        macKey = &mLinks.GetSubMac().GetPreviousMacKey();
+        // macKey = &mLinks.GetSubMac().GetPreviousMacKey();
+        macKey = &mLinks.GetSubMac().GetPreviousMacKeyForPanId(panId);
     }
     else if (ackKeyId == ((keyManager.GetCurrentKeySequence() + 1) & 0x7f))
     {
-        macKey = &mLinks.GetSubMac().GetNextMacKey();
+        // macKey = &mLinks.GetSubMac().GetNextMacKey();
+        macKey = &mLinks.GetSubMac().GetNextMacKeyForPanId(panId);
     }
     else
     {
@@ -1900,7 +1954,11 @@ void Mac::HandleReceivedFrame(RxFrame *aFrame, Error aError)
     // Verify destination PAN ID if present
     if (kErrorNone == aFrame->GetDstPanId(panid))
     {
-        VerifyOrExit(panid == kShortAddrBroadcast || panid == mPanId, error = kErrorDestinationAddressFiltered);
+        VerifyOrExit(panid == kShortAddrBroadcast || panid == mPanId ||  Mac::IsPanIdInList(panid) , error = kErrorDestinationAddressFiltered);
+        if(Mac::IsPanIdInList(panid)){
+            SetTemporaryPanId(panid);
+            SetTemporaryPanIdValid(true);
+        }
     }
 
     // Source Address Filtering
@@ -2169,6 +2227,24 @@ exit:
         }
     }
 #endif // OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
+}
+
+bool Mac::IsPanIdInList(PanId panid)
+{
+    otOperationalDataset dataset;
+    otError error = otDatasetGetActive(static_cast<otInstance *>(&GetInstance()), &dataset);
+
+    if (error == OT_ERROR_NONE && dataset.mComponents.mIsPanIdsPresent)
+    {
+        for (uint8_t i = 0; i < dataset.mPanIds.mCount; ++i)
+        {
+            if (dataset.mPanIds.mPanIds[i] == panid)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 void Mac::UpdateNeighborLinkInfo(Neighbor &aNeighbor, const RxFrame &aRxFrame)

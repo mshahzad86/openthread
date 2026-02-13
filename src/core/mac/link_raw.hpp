@@ -256,7 +256,7 @@ public:
      */
     Error SetMacKey(uint8_t aKeyIdMode, uint8_t aKeyId, const Key &aPrevKey, const Key &aCurrKey, const Key &aNextKey);
 
-    /**
+   /**
      * Updates Multi-PAN MAC keys and key index.
      *
      * @param[in]   aKeyIdMode        The key ID mode.

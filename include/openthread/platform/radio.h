@@ -221,9 +221,16 @@ typedef struct otMacKeyMaterial
 } otMacKeyMaterial;
 
 /**
- * @struct otPanIdKeyMaterial
- *
- * Represents a Map of Pan ID and MAC Key material.
+ * Defines constants about key types.
+ */
+typedef enum
+{
+    OT_KEY_TYPE_LITERAL_KEY = 0, ///< Use Literal Keys.
+    OT_KEY_TYPE_KEY_REF     = 1, ///< Use Reference to Key.
+} otRadioKeyType;
+
+/** 
+ * Holds PAN ID and its associated MAC key materials (current, previous, next). 
  */
 typedef struct otPanIdKeyMaterial
 {
@@ -233,10 +240,8 @@ typedef struct otPanIdKeyMaterial
     otMacKeyMaterial nextMacKey;
 } otPanIdKeyMaterial;
 
-/**
- * @struct otPanIdKey
- *
- * Represents a Map of Pan ID and MAC Key.
+/** 
+ * Holds PAN ID and its active MAC keys (current, previous, next). 
  */
 typedef struct otPanIdKey
 {
@@ -247,25 +252,37 @@ typedef struct otPanIdKey
 } otPanIdKey;
 
 #ifdef __cplusplus
-// C++-specific code
+/** 
+ * Maximum number of PAN key entries supported. 
+ */
 static constexpr uint8_t kMaxPanKeys = 64;
+
+/** 
+ * Fixed-size array type for storing PAN key materials. 
+ */
 using otPanIdKeyMaterialMap = otPanIdKeyMaterial[kMaxPanKeys];
+
+/** 
+ * Fixed-size array type for storing PAN keys. 
+ */
 using otPanIdKeyMap = otPanIdKey[kMaxPanKeys];
 #else
-// C-compatible code
+/** 
+ * Maximum number of PAN key entries supported. 
+ */
 #define kMaxPanKeys 64
+
+/** 
+ * Fixed-size array type for storing PAN key materials. 
+ */
 typedef otPanIdKeyMaterial otPanIdKeyMaterialMap[kMaxPanKeys];
+
+/** 
+ * Fixed-size array type for storing PAN keys. 
+ */
 typedef otPanIdKey otPanIdKeyMap[kMaxPanKeys];
 #endif
 
-/**
- * Defines constants about key types.
- */
-typedef enum
-{
-    OT_KEY_TYPE_LITERAL_KEY = 0, ///< Use Literal Keys.
-    OT_KEY_TYPE_KEY_REF     = 1, ///< Use Reference to Key.
-} otRadioKeyType;
 
 /**
  * Represents the IEEE 802.15.4 Header IE (Information Element) related information of a radio frame.
@@ -754,7 +771,7 @@ void otPlatRadioSetRxOnWhenIdle(otInstance *aInstance, bool aEnable);
  * @param[in]   aNextKey     A pointer to the next MAC key.
  * @param[in]   aKeyType     Key Type used.
  */
-void otPlatRadioSetMacKey(otInstance             *aInstance,
+void otPlatRadioSetMacKeySingle(otInstance             *aInstance,
                           uint8_t                 aKeyIdMode,
                           uint8_t                 aKeyId,
                           const otMacKeyMaterial *aPrevKey,

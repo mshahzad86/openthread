@@ -259,6 +259,11 @@ template <> otError RcpCapsDiag::HandleSpinelCommand<SPINEL_CMD_PROP_VALUE_SET, 
     return mRadioSpinel.SetMacKey(keyIdMode1, keyId, &prevKey, &curKey, &nextKey);
 }
 
+template <> otError RcpCapsDiag::HandleSpinelCommand<SPINEL_CMD_PROP_VALUE_SET, SPINEL_PROP_RCP_MAC_KEY_MULTIPAN>(void)
+{
+    static constexpr uint16_t     panId = 0x1234;
+}
+
 template <> otError RcpCapsDiag::HandleSpinelCommand<SPINEL_CMD_PROP_VALUE_GET, SPINEL_PROP_RCP_CSL_ACCURACY>(void)
 {
     uint8_t accuracy;

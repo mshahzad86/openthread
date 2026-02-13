@@ -271,17 +271,17 @@ Error LinkRaw::SetMacKey(uint8_t aKeyIdMode, uint8_t aKeyId, const otPanIdKeyMap
 
     // Convert otPanIdKeyMap to PanIdKeyMaterialMap for SubMac
     SubMac::PanIdKeyMaterialMap panIdKeyMaterials;
-    
+
     for (uint8_t i = 0; i < kMaxPanKeys; ++i)
     {
         panIdKeyMaterials[i].panId = aPanIdKeyMap[i].panId;
-        
+
         // Convert otMacKey to KeyMaterial for SubMac
         KeyMaterial curKeyMaterial, prevKeyMaterial, nextKeyMaterial;
         curKeyMaterial.SetFrom(AsCoreType(&aPanIdKeyMap[i].curMacKey));
         prevKeyMaterial.SetFrom(AsCoreType(&aPanIdKeyMap[i].prevMacKey));
         nextKeyMaterial.SetFrom(AsCoreType(&aPanIdKeyMap[i].nextMacKey));
-        
+
         panIdKeyMaterials[i].curMacKey = curKeyMaterial;
         panIdKeyMaterials[i].prevMacKey = prevKeyMaterial;
         panIdKeyMaterials[i].nextMacKey = nextKeyMaterial;

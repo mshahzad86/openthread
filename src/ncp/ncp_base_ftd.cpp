@@ -79,6 +79,7 @@ otError NcpBase::EncodeChildInfo(const otChildInfo &aChildInfo)
     SuccessOrExit(error = mEncoder.WriteInt8(aChildInfo.mAverageRssi));
     SuccessOrExit(error = mEncoder.WriteUint8(modeFlags));
     SuccessOrExit(error = mEncoder.WriteInt8(aChildInfo.mLastRssi));
+    SuccessOrExit(error = mEncoder.WriteUint16(aChildInfo.mPanId));
 
 exit:
     return error;

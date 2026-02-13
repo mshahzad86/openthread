@@ -32,7 +32,8 @@
  */
 
 #include "key_manager.hpp"
-
+#include <cstdio>
+#include <cstdint>
 #include "crypto/hkdf_sha256.hpp"
 #include "crypto/storage.hpp"
 #include "instance/instance.hpp"
@@ -283,6 +284,55 @@ void KeyManager::SetNetworkKey(const NetworkKey &aNetworkKey)
 exit:
     return;
 }
+void KeyManager::ComputeKeys(uint32_t aKeySequence, PanIdHashKeyMap &aKeyMap) const
+{
+    struct
+    {
+        const uint8_t *key;
+        uint16_t       panId;
+        const char    *label;
+    } keySources[kMaxPanKeys];
+
+    // First entry: Default network key for router's PAN ID
+    keySources[0].key   = mNetworkKey.m8;
+    keySources[0].panId = Get<Mac::Mac>().GetPanId();
+    keySources[0].label = "Router PAN key";
+
+    // Additional entries: Configured PAN Keys mapped to PAN IDs
+    for (uint8_t i = 0; i < mPanIdCount; ++i)
+    {
+        keySources[i + 1].key   = mPanKeys[i].m8;
+        keySources[i + 1].panId = mPanIds[i];
+        keySources[i + 1].label = "Configured PAN key";
+    }
+
+    uint8_t count = 1 + mPanIdCount;
+    if (count > kMaxPanKeys) count = kMaxPanKeys;
+
+    for (uint8_t i = 0; i < count; ++i)
+    {
+        Crypto::HmacSha256 hmac;
+        uint8_t            keySequenceBytes[sizeof(uint32_t)];
+        Crypto::Key        cryptoKey;
+
+        cryptoKey.Set(keySources[i].key, NetworkKey::kSize);
+
+        hmac.Start(cryptoKey);
+        BigEndian::WriteUint32(aKeySequence, keySequenceBytes);
+        hmac.Update(keySequenceBytes);
+        hmac.Update(kThreadString);
+        hmac.Finish(aKeyMap[i].keys.mHash);
+
+        aKeyMap[i].panId = keySources[i].panId;
+    }
+
+    // Zero out any remaining entries
+    for (uint8_t i = count; i < kMaxPanKeys; ++i)
+    {
+        aKeyMap[i].panId = 0;
+        memset(&aKeyMap[i].keys, 0, sizeof(aKeyMap[i].keys));
+    }
+}
 
 void KeyManager::ComputeKeys(uint32_t aKeySequence, HashKeys &aHashKeys) const
 {
@@ -328,30 +378,40 @@ void KeyManager::ComputeTrelKey(uint32_t aKeySequence, Mac::Key &aKey) const
 
 void KeyManager::UpdateKeyMaterial(void)
 {
-    HashKeys hashKeys;
+    PanIdHashKeyMap hashKeyMap;
+    PanIdHashKeyMap prevMap;
+    PanIdHashKeyMap nextMap;
 
-    ComputeKeys(mKeySequence, hashKeys);
-
-    mMleKey.SetFrom(hashKeys.GetMleKey());
+    ComputeKeys(mKeySequence, hashKeyMap);
+    ComputeKeys(mKeySequence - 1, prevMap);
+    ComputeKeys(mKeySequence + 1, nextMap);
 
 #if OPENTHREAD_CONFIG_RADIO_LINK_IEEE_802_15_4_ENABLE
+    for (int i = 0; i < kMaxPanKeys; ++i)
     {
-        Mac::KeyMaterial curKey;
-        Mac::KeyMaterial prevKey;
-        Mac::KeyMaterial nextKey;
+        uint16_t panId = hashKeyMap[i].panId;
+        const HashKeys &cur = hashKeyMap[i].keys;
+        const HashKeys *prev = nullptr;
+        const HashKeys *next = nullptr;
 
-        curKey.SetFrom(hashKeys.GetMacKey(), kExportableMacKeys);
+        for (int j = 0; j < kMaxPanKeys; ++j)
+        {
+            if (prevMap[j].panId == panId) prev = &prevMap[j].keys;
+            if (nextMap[j].panId == panId) next = &nextMap[j].keys;
+        }
+        OT_ASSERT(prev != nullptr && next != nullptr);
 
-        ComputeKeys(mKeySequence - 1, hashKeys);
-        prevKey.SetFrom(hashKeys.GetMacKey(), kExportableMacKeys);
+        Mac::KeyMaterial curMacKey, prevMacKey, nextMacKey;
+        curMacKey.SetFrom(cur.GetMacKey(), kExportableMacKeys);
+        prevMacKey.SetFrom(prev->GetMacKey(), kExportableMacKeys);
+        nextMacKey.SetFrom(next->GetMacKey(), kExportableMacKeys);
 
-        ComputeKeys(mKeySequence + 1, hashKeys);
-        nextKey.SetFrom(hashKeys.GetMacKey(), kExportableMacKeys);
-
-        Get<Mac::SubMac>().SetMacKey(Mac::Frame::kKeyIdMode1, (mKeySequence & 0x7f) + 1, prevKey, curKey, nextKey);
-    }
+        mPanIdKeyMaterials[i].panId = panId;
+        mPanIdKeyMaterials[i].mleKey.SetFrom(cur.GetMleKey());
+        mPanIdKeyMaterials[i].curMacKey = curMacKey;
+        mPanIdKeyMaterials[i].prevMacKey = prevMacKey;
+        mPanIdKeyMaterials[i].nextMacKey = nextMacKey;
 #endif
-
 #if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
     {
         Mac::Key key;
@@ -360,6 +420,18 @@ void KeyManager::UpdateKeyMaterial(void)
         mTrelKey.SetFrom(key);
     }
 #endif
+    }
+    ot::Mac::SubMac::PanIdKeyMaterial tempKeyMaterials[kMaxPanKeys];
+    for (uint8_t j = 0; j < kMaxPanKeys; ++j)
+    {
+        tempKeyMaterials[j].panId           = mPanIdKeyMaterials[j].panId;
+        tempKeyMaterials[j].curMacKey       = mPanIdKeyMaterials[j].curMacKey;
+        tempKeyMaterials[j].prevMacKey      = mPanIdKeyMaterials[j].prevMacKey;
+        tempKeyMaterials[j].nextMacKey      = mPanIdKeyMaterials[j].nextMacKey;
+    }
+    Get<Mac::SubMac>().SetMacKey(Mac::Frame::kKeyIdMode1,
+                            (mKeySequence & 0x7f) + 1,
+                            tempKeyMaterials);
 }
 
 void KeyManager::SetCurrentKeySequence(uint32_t aKeySequence, KeySeqUpdateFlags aFlags)

@@ -365,11 +365,11 @@ otError otLinkRawSetMacKey(otInstance     *aInstance,
  * @retval OT_ERROR_NONE             If successful.
  * @retval OT_ERROR_INVALID_STATE    If the raw link-layer isn't enabled.
  */
-otError otLinkRawSetMacKeyMultiPan(otInstance         *aInstance,
-                                   uint8_t             aKeyIdMode,
-                                   uint8_t             aKeyId,
-                                   const otPanIdKeyMap aPanIdKeyMap);
-
+otError otLinkRawSetMacKeyMultiPan(otInstance             *aInstance,
+                                   uint8_t                 aKeyIdMode,
+                                   uint8_t                 aKeyId,
+                                   const otPanIdKeyMap     aPanIdKeyMap);
+                                   
 /**
  * Sets the current MAC frame counter value.
  *

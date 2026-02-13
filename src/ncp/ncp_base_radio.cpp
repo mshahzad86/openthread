@@ -39,6 +39,7 @@
 #include <openthread/platform/multipan.h>
 #include <openthread/platform/radio.h>
 #include <openthread/platform/time.h>
+#include <openthread/logging.h>
 
 #include "common/code_utils.hpp"
 #include "common/debug.hpp"
@@ -50,6 +51,7 @@
 namespace ot {
 namespace Ncp {
 
+RegisterLogModule("NcpBaseRadio");
 #if OPENTHREAD_RADIO
 template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_RCP_API_VERSION>(void)
 {
@@ -546,6 +548,7 @@ template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_RCP_MAC_KEY>(void)
     const uint8_t *prevKey;
     const uint8_t *currKey;
     const uint8_t *nextKey;
+    // uint8_t        panId;
 
     SuccessOrExit(error = mDecoder.ReadUint8(keyIdMode));
     VerifyOrExit(keyIdMode == Mac::Frame::kKeyIdMode1, error = OT_ERROR_INVALID_ARGS);
