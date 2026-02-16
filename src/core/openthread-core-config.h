@@ -96,6 +96,7 @@
 #include "config/mesh_forwarder.h"
 #include "config/misc.h"
 #include "config/mle.h"
+#include "config/multipan.h"
 #include "config/nat64.h"
 #include "config/netdata_publisher.h"
 #include "config/network_diagnostic.h"

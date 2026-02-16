@@ -349,8 +349,6 @@ public:
      */
     const Mle::KeyMaterial &GetCurrentMleKey(void) const { return mMleKey; }
 
-    static constexpr uint8_t kMaxPanKeys = 64;
-
     /**
      * Returns the current MLE key Material.
      *
@@ -367,8 +365,8 @@ public:
         }
 
         // If not found, assert or fallback
-        OT_ASSERT(false);        // Will halt in debug builds
-        return mMleKey;          // Safe fallback to current key
+        OT_ASSERT(false); // Will halt in debug builds
+        return mMleKey;   // Safe fallback to current key
     }
 
     /**
@@ -574,7 +572,7 @@ public:
         }
         CheckForKeyRotation();
         UpdateKeyMaterial();
-    }  
+    }
 
     /**
      * Handles MAC frame counter changes (callback from `SubMac` for 15.4 security frame change).
@@ -681,11 +679,11 @@ private:
     PanIdKeyMaterialMap mPanIdKeyMaterials;
 
     // Multi-PAN: configured PAN IDs and Keys (from Dataset)
-    uint8_t    mPanIdCount = 0;
-    uint8_t    mPanKeyCount = 0;
+    uint8_t    mPanIdCount          = 0;
+    uint8_t    mPanKeyCount         = 0;
     uint16_t   mPanIds[kMaxPanKeys] = {};
     NetworkKey mPanKeys[kMaxPanKeys];
-    
+
 #if OPENTHREAD_CONFIG_WAKEUP_END_DEVICE_ENABLE
     Mle::KeyMaterial mTemporaryMacKey;
 #endif

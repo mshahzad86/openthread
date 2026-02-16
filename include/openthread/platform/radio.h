@@ -42,6 +42,7 @@
 #include <openthread/instance.h>
 #include <openthread/platform/crypto.h>
 #include <openthread/platform/toolchain.h>
+#include <src/core/config/multipan.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -252,10 +253,6 @@ typedef struct otPanIdKey
 } otPanIdKey;
 
 #ifdef __cplusplus
-/** 
- * Maximum number of PAN key entries supported. 
- */
-static constexpr uint8_t kMaxPanKeys = 64;
 
 /** 
  * Fixed-size array type for storing PAN key materials. 
@@ -267,10 +264,6 @@ using otPanIdKeyMaterialMap = otPanIdKeyMaterial[kMaxPanKeys];
  */
 using otPanIdKeyMap = otPanIdKey[kMaxPanKeys];
 #else
-/** 
- * Maximum number of PAN key entries supported. 
- */
-#define kMaxPanKeys 64
 
 /** 
  * Fixed-size array type for storing PAN key materials. 
