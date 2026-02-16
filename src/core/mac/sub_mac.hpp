@@ -417,7 +417,7 @@ public:
                    const KeyMaterial &aPrevKey,
                    const KeyMaterial &aCurrKey,
                    const KeyMaterial &aNextKey);
-    
+
     // Map of Pan ID and Key materials.
     struct PanIdKeyMaterial
     {
@@ -427,8 +427,7 @@ public:
         otMacKeyMaterial nextMacKey;
     };
 
-    static constexpr uint8_t kMaxPanKeys = 64;
-    using PanIdKeyMaterialMap            = PanIdKeyMaterial[kMaxPanKeys];
+    using PanIdKeyMaterialMap = PanIdKeyMaterial[kMaxPanKeys];
     PanIdKeyMaterialMap mPanIdKeyMaterials;
 
     /**
@@ -510,13 +509,13 @@ public:
     {
         for (uint8_t i = 0; i < kMaxPanKeys; ++i)
         {
-            mPanIdKeyMaterials[i].panId = 0;
-            mPanIdKeyMaterials[i].curMacKey.mKeyMaterial.mKeyRef = 0;
+            mPanIdKeyMaterials[i].panId                           = 0;
+            mPanIdKeyMaterials[i].curMacKey.mKeyMaterial.mKeyRef  = 0;
             mPanIdKeyMaterials[i].prevMacKey.mKeyMaterial.mKeyRef = 0;
             mPanIdKeyMaterials[i].nextMacKey.mKeyMaterial.mKeyRef = 0;
         }
     }
-    
+
     /**
      * Returns the current MAC frame counter value.
      *
