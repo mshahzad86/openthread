@@ -700,7 +700,6 @@ otError Dataset::ProcessCommand(const ComponentMapper &aMapper, Arg aArgs[])
     }
     else
     {
-        LogDebg("ProcessCommand: Bypassing TLV, setting value directly to dataset");
         // Special-case: if this is the pankeys set command, bypass TLV/dataset update logic
         if (aMapper.mParse == &Dataset::ParsePanKeys)
         {
