@@ -35,6 +35,10 @@
 
 #include "instance/instance.hpp"
 
+
+#define kMaxLogModuleNameLength ot::kMaxLogModuleNameLength
+RegisterLogModule("DiscScanner");
+
 namespace ot {
 namespace Mle {
 
@@ -338,7 +342,9 @@ void DiscoverScanner::HandleDiscoveryResponse(Mle::RxInfo &aRxInfo) const
     ClearAllBytes(result);
     result.mDiscover = true;
     result.mPanId    = aRxInfo.mMessage.GetPanId();
+    LogWarn("Received Discovery Response from %04x", result.mPanId);
     result.mChannel  = aRxInfo.mMessage.GetChannel();
+    LogWarn("Received Discovery Response on channel %d", result.mChannel);
     result.mRssi     = aRxInfo.mMessage.GetAverageRss();
     result.mLqi      = aRxInfo.mMessage.GetAverageLqi();
 
@@ -348,10 +354,18 @@ void DiscoverScanner::HandleDiscoveryResponse(Mle::RxInfo &aRxInfo) const
 
     SuccessOrExit(error = Tlv::Find<MeshCoP::DiscoveryResponseTlv>(aRxInfo.mMessage, respTlvValue));
     result.mVersion  = respTlvValue.GetVersion();
+    LogWarn("Received Discovery Response with version %d", result.mVersion);
     result.mIsNative = respTlvValue.GetNativeCommissionerFlag();
 
     SuccessOrExit(error = Tlv::Find<MeshCoP::ExtendedPanIdTlv>(aRxInfo.mMessage, AsCoreType(&result.mExtendedPanId)));
+    {
+        const uint8_t *extPanIdBytes = reinterpret_cast<const uint8_t *>(&result.mExtendedPanId);
+        LogWarn("Received Discovery Response with extended PAN ID %02x%02x%02x%02x%02x%02x%02x%02x",
+            extPanIdBytes[0], extPanIdBytes[1], extPanIdBytes[2], extPanIdBytes[3],
+            extPanIdBytes[4], extPanIdBytes[5], extPanIdBytes[6], extPanIdBytes[7]);
+    }
     SuccessOrExit(error = Tlv::Find<MeshCoP::NetworkNameTlv>(aRxInfo.mMessage, result.mNetworkName.m8));
+    LogWarn("Received Discovery Response with network name %s", result.mNetworkName.m8);
 
     // Optional TLVs
 
@@ -360,6 +374,7 @@ void DiscoverScanner::HandleDiscoveryResponse(Mle::RxInfo &aRxInfo) const
     case kErrorNone:
         break;
     case kErrorNotFound:
+        LogWarn("Received Discovery Response without Joiner UDP Port");
         result.mJoinerUdpPort = 0;
         break;
     default:

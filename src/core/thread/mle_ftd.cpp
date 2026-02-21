@@ -2782,6 +2782,7 @@ void Mle::HandleDiscoveryRequest(RxInfo &aRxInfo)
     }
 
     responseInfo.mPanId = aRxInfo.mMessage.GetPanId();
+    LogWarn("Logging PanID in the Discovery Request: 0x%04x", responseInfo.mPanId);
 
 #if OPENTHREAD_CONFIG_MULTI_RADIO
     // Send the MLE Discovery Response message on same radio link
@@ -2806,6 +2807,7 @@ Error Mle::SendDiscoveryResponse(const Ip6::Address &aDestination, const Discove
     VerifyOrExit((message = NewMleMessage(kCommandDiscoveryResponse)) != nullptr, error = kErrorNoBufs);
     message->SetDirectTransmission();
     message->SetPanId(aInfo.mPanId);
+    LogWarn("Logging PanID in the Discovery Response: 0x%04x", aInfo.mPanId);
 #if OPENTHREAD_CONFIG_MULTI_RADIO
     message->SetRadioType(aInfo.mRadioType);
 #endif

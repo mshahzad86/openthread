@@ -290,6 +290,12 @@ Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(void)
 
     for (Tlv::Type tlvType : kTlvTypes)
     {
+        LogWarn("Append TLV");
+        // Skip PanIdTlv and PanIdKeyTlv
+        if (tlvType == Tlv::kPanIds || tlvType == Tlv::kPanKeys)
+        {
+            continue;
+        }
         const Tlv *tlv = dataset.FindTlv(tlvType);
 
         VerifyOrExit(tlv != nullptr, error = kErrorInvalidState);
@@ -297,6 +303,12 @@ Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(void)
     }
 
     SuccessOrExit(error = Tlv::Append<NetworkKeySequenceTlv>(*message, Get<KeyManager>().GetCurrentKeySequence()));
+
+    // // Append PanIdTlv with value 0x7777 (override configured one)
+    // {
+    //     uint16_t panId = 0x7777;
+    //     SuccessOrExit(error = Tlv::Append<PanIdTlv>(*message, panId));
+    // }
 
 exit:
     FreeAndNullMessageOnError(message, error);
