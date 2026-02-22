@@ -104,6 +104,7 @@ Error DiscoverScanner::Discover(const Mac::ChannelMask &aScanChannels,
 
     VerifyOrExit((message = Get<Mle>().NewMleMessage(kCommandDiscoveryRequest)) != nullptr, error = kErrorNoBufs);
     message->SetPanId(aPanId);
+    LogWarn("Start Discovery Request with PAN ID %04x", aPanId);
 
     // Append Discovery TLV with one or two sub-TLVs.
 

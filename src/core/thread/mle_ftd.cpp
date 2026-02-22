@@ -2719,6 +2719,7 @@ void Mle::HandleDiscoveryRequest(RxInfo &aRxInfo)
     DiscoveryResponseInfo             responseInfo;
 
     Log(kMessageReceive, kTypeDiscoveryRequest, aRxInfo.mMessageInfo.GetPeerAddr());
+    LogWarn("Logging PanID in the Discovery Request: 0x%04x", aRxInfo.mMessage.GetPanId());
 
     VerifyOrExit(IsRouterEligible(), error = kErrorInvalidState);
 
@@ -2736,12 +2737,14 @@ void Mle::HandleDiscoveryRequest(RxInfo &aRxInfo)
         switch (tlvInfo.GetType())
         {
         case MeshCoP::Tlv::kDiscoveryRequest:
+            LogWarn("Found Discovery Request TLV in the Discovery Request message");
             SuccessOrExit(error =
                               tlvInfo.Read<MeshCoP::DiscoveryRequestTlv>(aRxInfo.mMessage, discoveryRequestTlvValue));
             parsedDiscoveryRequestTlv = true;
             break;
 
         case MeshCoP::Tlv::kExtendedPanId:
+            LogWarn("Found Extended PAN ID TLV in the Discovery Request message");
             SuccessOrExit(error = tlvInfo.Read<MeshCoP::ExtendedPanIdTlv>(aRxInfo.mMessage, extPanId));
             VerifyOrExit(Get<MeshCoP::NetworkIdentity>().GetExtPanId() != extPanId, error = kErrorDrop);
 
@@ -2806,8 +2809,8 @@ Error Mle::SendDiscoveryResponse(const Ip6::Address &aDestination, const Discove
 
     VerifyOrExit((message = NewMleMessage(kCommandDiscoveryResponse)) != nullptr, error = kErrorNoBufs);
     message->SetDirectTransmission();
-    message->SetPanId(aInfo.mPanId);
-    LogWarn("Logging PanID in the Discovery Response: 0x%04x", aInfo.mPanId);
+    message->SetPanId(0x7777);
+    LogWarn("Logging PanID in the Discovery Response: 0x%04x (forced)", 0x7777);
 #if OPENTHREAD_CONFIG_MULTI_RADIO
     message->SetRadioType(aInfo.mRadioType);
 #endif

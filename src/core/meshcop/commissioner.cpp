@@ -383,6 +383,7 @@ void Commissioner::SendCommissionerSet(void)
 
     dataset.Clear();
 
+
     dataset.SetSessionId(mSessionId);
     ComputeBloomFilter(dataset.UpdateSteeringData());
 
@@ -666,6 +667,14 @@ Error Commissioner::SendMgmtCommissionerSetRequest(const CommissioningDataset &a
     {
         SuccessOrExit(error = Tlv::Append<JoinerUdpPortTlv>(*message, aDataset.GetJoinerUdpPort()));
     }
+
+    // Remove any existing PanId TLV from the dataset/message before appending our custom one
+    // (No API for this on dataset, so ensure only one PanId TLV is present in the message)
+    // Remove any PanId TLV from the message buffer (if present)
+    // This is a workaround: since message is new, and we control all TLV appends, just append our PanId TLV last
+    // and ensure dataset does not add one earlier (dataset does not add PanId by default in this flow)
+    // So, append only our custom PanId TLV:
+    // SuccessOrExit(error = Tlv::Append<PanIdTlv>(*message, 0x7777));
 
     if (aLength > 0)
     {

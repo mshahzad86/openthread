@@ -290,25 +290,46 @@ Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(void)
 
     for (Tlv::Type tlvType : kTlvTypes)
     {
-        LogWarn("Append TLV");
-        // Skip PanIdTlv and PanIdKeyTlv
+        // Skip PanIds and PanKeys TLVs
         if (tlvType == Tlv::kPanIds || tlvType == Tlv::kPanKeys)
         {
             continue;
         }
+        // Inject custom PAN ID for PanId TLV
+        if (tlvType == Tlv::kPanId)
+        {
+            LogWarn("JoinerEntrust: Appending custom PAN ID 0x7777");
+            uint16_t customPanId = 0x7777;
+            uint8_t panIdTlv[3]; // 1 byte type, 2 bytes value
+            panIdTlv[0] = static_cast<uint8_t>(Tlv::kPanId);
+            panIdTlv[1] = static_cast<uint8_t>(customPanId >> 8);
+            panIdTlv[2] = static_cast<uint8_t>(customPanId & 0xFF);
+            SuccessOrExit(error = message->AppendBytes(panIdTlv, sizeof(panIdTlv)));
+            LogWarn("JoinerEntrust: TLV value: %02x %02x %02x", panIdTlv[0], panIdTlv[1], panIdTlv[2]);
+            continue;
+        }
         const Tlv *tlv = dataset.FindTlv(tlvType);
 
-        VerifyOrExit(tlv != nullptr, error = kErrorInvalidState);
+        if (tlv == nullptr)
+        {
+            LogWarn("JoinerEntrust: TLV type %d not found", static_cast<int>(tlvType));
+            error = kErrorInvalidState;
+            goto exit;
+        }
+
+        LogWarn("JoinerEntrust: Appending TLV type %d, length %d", static_cast<int>(tlvType), tlv->GetLength());
+        // Print TLV contents as hex
+        char tlvHex[256] = {0};
+        for (uint8_t i = 0; i < tlv->GetLength() && i < sizeof(tlvHex)/3-1; ++i)
+        {
+            sprintf(&tlvHex[i*3], "%02x ", tlv->GetValue()[i]);
+        }
+        LogWarn("JoinerEntrust: TLV value: %s", tlvHex);
+
         SuccessOrExit(error = tlv->AppendTo(*message));
     }
 
     SuccessOrExit(error = Tlv::Append<NetworkKeySequenceTlv>(*message, Get<KeyManager>().GetCurrentKeySequence()));
-
-    // // Append PanIdTlv with value 0x7777 (override configured one)
-    // {
-    //     uint16_t panId = 0x7777;
-    //     SuccessOrExit(error = Tlv::Append<PanIdTlv>(*message, panId));
-    // }
 
 exit:
     FreeAndNullMessageOnError(message, error);
