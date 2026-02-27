@@ -1420,6 +1420,7 @@ void Mle::HandleParentRequest(RxInfo &aRxInfo)
     Mac::PanId         panId;
 
     Log(kMessageReceive, kTypeParentRequest, aRxInfo.mMessageInfo.GetPeerAddr());
+    LogWarn("############# Handle Parent Request");
 
     VerifyOrExit(IsRouterEligible());
     VerifyOrExit(!IsDetached() && !IsAttaching());
@@ -1456,6 +1457,7 @@ void Mle::HandleParentRequest(RxInfo &aRxInfo)
     
     // Get the PAN ID from the message
     panId = aRxInfo.mMessage.GetPanId();
+    LogWarn("############# Pan id from the message 0x%04x", panId);
 
     child = mChildTable.FindChild(info.mChildExtAddress, Child::kInStateAnyExceptInvalid);
 
@@ -1466,6 +1468,7 @@ void Mle::HandleParentRequest(RxInfo &aRxInfo)
         InitNeighbor(*child, aRxInfo);
         child->SetState(Neighbor::kStateParentRequest);
         child->SetPanId(panId); // Store the PAN ID for this child
+        LogWarn("############ Adding this child in the child table");
 #if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
         child->SetTimeSyncEnabled(Tlv::Find<TimeRequestTlv>(aRxInfo.mMessage, nullptr, 0) == kErrorNone);
 #endif
@@ -2071,6 +2074,7 @@ void Mle::HandleChildIdRequest(RxInfo &aRxInfo)
     uint16_t           supervisionInterval;
 
     Log(kMessageReceive, kTypeChildIdRequest, aRxInfo.mMessageInfo.GetPeerAddr());
+    LogWarn("########### Inside handle child id resquest");
 
     VerifyOrExit(IsRouterEligible(), error = kErrorInvalidState);
 
@@ -2809,8 +2813,7 @@ Error Mle::SendDiscoveryResponse(const Ip6::Address &aDestination, const Discove
 
     VerifyOrExit((message = NewMleMessage(kCommandDiscoveryResponse)) != nullptr, error = kErrorNoBufs);
     message->SetDirectTransmission();
-    message->SetPanId(0x7777);
-    LogWarn("Logging PanID in the Discovery Response: 0x%04x (forced)", 0x7777);
+    message->SetPanId(aInfo.mPanId);
 #if OPENTHREAD_CONFIG_MULTI_RADIO
     message->SetRadioType(aInfo.mRadioType);
 #endif
@@ -2832,6 +2835,7 @@ Error Mle::SendDiscoveryResponse(const Ip6::Address &aDestination, const Discove
 
     if (Get<KeyManager>().GetSecurityPolicy().mCommercialCommissioningEnabled)
     {
+        LogWarn("Commercial commissioning is enabled, setting CCM flag in Discovery Response");
         discoveryResponseTlvValue.SetCcmFlag();
     }
 
@@ -2839,9 +2843,11 @@ Error Mle::SendDiscoveryResponse(const Ip6::Address &aDestination, const Discove
 
     SuccessOrExit(error =
                       Tlv::Append<MeshCoP::ExtendedPanIdTlv>(*message, Get<MeshCoP::NetworkIdentity>().GetExtPanId()));
+    LogWarn("Logging Extended PAN ID in the Discovery Response: 0x%016llx", Get<MeshCoP::NetworkIdentity>().GetExtPanId());
 
     SuccessOrExit(error = Tlv::Append<MeshCoP::NetworkNameTlv>(
                       *message, Get<MeshCoP::NetworkIdentity>().GetNetworkName().GetAsCString()));
+    LogWarn("Logging Network Name in the Discovery Response: %s", Get<MeshCoP::NetworkIdentity>().GetNetworkName().GetAsCString());
 
     SuccessOrExit(error = message->AppendSteeringDataTlv());
 

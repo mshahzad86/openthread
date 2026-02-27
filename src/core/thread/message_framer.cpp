@@ -31,7 +31,9 @@
  *   This file includes implementation of `MessageFramer`.
  */
 
-#include "message_framer.hpp" 
+#include "message_framer.hpp"
+
+static constexpr const char *kLogModuleName = "MessageFramer";
 
 #include "instance/instance.hpp"
 
@@ -175,7 +177,9 @@ start:
         }
     }
 
-    frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+    // frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+    frameInfo.mPanIds.SetBothSourceDestination(0x7777);
+    LogWarn("Logging PanID in the prepare frame: 0x%04x (forced) 0x%04x", 0x7777, Get<Mac::Mac>().GetPanId());
 
     if (aMessage.IsSubTypeMle())
     {
@@ -189,7 +193,10 @@ start:
 
         case Mle::kCommandDiscoveryRequest:
         case Mle::kCommandDiscoveryResponse:
+            LogWarn("Logging PanID in the MLE Discovery Response: 0x%04x (forced) 0x%04x", 0x7777, aMessage.GetPanId());
+            // frameInfo.mPanIds.SetDestination(0x7777); // For testing, use a fixed PAN ID to ensure encryption works even if child lookup fails
             frameInfo.mPanIds.SetDestination(aMessage.GetPanId());
+            frameInfo.mPanIds.SetSource(0x7777); // For testing, use a fixed PAN ID to ensure encryption works even if child lookup fails
             break;
 
         default:

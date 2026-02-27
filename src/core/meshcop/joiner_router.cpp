@@ -290,24 +290,6 @@ Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(void)
 
     for (Tlv::Type tlvType : kTlvTypes)
     {
-        // Skip PanIds and PanKeys TLVs
-        if (tlvType == Tlv::kPanIds || tlvType == Tlv::kPanKeys)
-        {
-            continue;
-        }
-        // Inject custom PAN ID for PanId TLV
-        if (tlvType == Tlv::kPanId)
-        {
-            LogWarn("JoinerEntrust: Appending custom PAN ID 0x7777");
-            uint16_t customPanId = 0x7777;
-            uint8_t panIdTlv[3]; // 1 byte type, 2 bytes value
-            panIdTlv[0] = static_cast<uint8_t>(Tlv::kPanId);
-            panIdTlv[1] = static_cast<uint8_t>(customPanId >> 8);
-            panIdTlv[2] = static_cast<uint8_t>(customPanId & 0xFF);
-            SuccessOrExit(error = message->AppendBytes(panIdTlv, sizeof(panIdTlv)));
-            LogWarn("JoinerEntrust: TLV value: %02x %02x %02x", panIdTlv[0], panIdTlv[1], panIdTlv[2]);
-            continue;
-        }
         const Tlv *tlv = dataset.FindTlv(tlvType);
 
         if (tlv == nullptr)

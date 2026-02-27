@@ -202,16 +202,16 @@ void TxFrame::Info::PrepareHeadersIn(TxFrame &aTxFrame) const
         if(mac.GetTemporaryPanIdValid() && !mac.IsPanIdInList(mPanIds.GetDestination()))
         {
             IgnoreError(builder.AppendLittleEndianUint16(mac.GetTemporaryPanId()));
-            LogWarn("Set dst pan id %04x", mac.GetTemporaryPanId());
+            LogWarn("Set dst pan id 1 %04x", mac.GetTemporaryPanId());
             mac.SetTemporaryPanIdValid(false);
         }
         else
         {
-            LogWarn("Set dst pan id %04x", mPanIds.GetDestination());
+            LogWarn("Set dst pan id 2 %04x", mPanIds.GetDestination());
             IgnoreError(builder.AppendLittleEndianUint16(mPanIds.GetDestination()));
         }
 #else
-        LogWarn("Set dst pan id %04x", mPanIds.GetDestination());
+        LogWarn("Set dst pan id 3 %04x", mPanIds.GetDestination());
         IgnoreError(builder.AppendLittleEndianUint16(mPanIds.GetDestination()));
 #endif
     }

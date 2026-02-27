@@ -291,29 +291,27 @@ typedef enum otMeshcopTlvType
 {
     OT_MESHCOP_TLV_CHANNEL                  = 0,   ///< meshcop Channel TLV
     OT_MESHCOP_TLV_PANID                    = 1,   ///< meshcop Pan Id TLV
-    OT_MESHCOP_TLV_PANIDS                   = 2,   ///< meshcop Pan Ids List TLV
-    OT_MESHCOP_TLV_PANKEYS                  = 3,   ///< meshcop Pan Keys List TLV
-    OT_MESHCOP_TLV_EXTPANID                 = 4,   ///< meshcop Extended Pan Id TLV
-    OT_MESHCOP_TLV_NETWORKNAME              = 5,   ///< meshcop Network Name TLV
-    OT_MESHCOP_TLV_PSKC                     = 6,   ///< meshcop PSKc TLV
-    OT_MESHCOP_TLV_NETWORKKEY               = 7,   ///< meshcop Network Key TLV
-    OT_MESHCOP_TLV_NETWORK_KEY_SEQUENCE     = 8,   ///< meshcop Network Key Sequence TLV
-    OT_MESHCOP_TLV_MESHLOCALPREFIX          = 9,   ///< meshcop Mesh Local Prefix TLV
-    OT_MESHCOP_TLV_STEERING_DATA            = 10,   ///< meshcop Steering Data TLV
-    OT_MESHCOP_TLV_BORDER_AGENT_RLOC        = 11,   ///< meshcop Border Agent Locator TLV
-    OT_MESHCOP_TLV_COMMISSIONER_ID          = 12,  ///< meshcop Commissioner ID TLV
-    OT_MESHCOP_TLV_COMM_SESSION_ID          = 13,  ///< meshcop Commissioner Session ID TLV
-    OT_MESHCOP_TLV_SECURITYPOLICY           = 14,  ///< meshcop Security Policy TLV
-    OT_MESHCOP_TLV_GET                      = 15,  ///< meshcop Get TLV
-    OT_MESHCOP_TLV_ACTIVETIMESTAMP          = 16,  ///< meshcop Active Timestamp TLV
-    OT_MESHCOP_TLV_COMMISSIONER_UDP_PORT    = 17,  ///< meshcop Commissioner UDP Port TLV
-    OT_MESHCOP_TLV_STATE                    = 18,  ///< meshcop State TLV
-    OT_MESHCOP_TLV_JOINER_DTLS              = 19,  ///< meshcop Joiner DTLS Encapsulation TLV
-    OT_MESHCOP_TLV_JOINER_UDP_PORT          = 20,  ///< meshcop Joiner UDP Port TLV
-    OT_MESHCOP_TLV_JOINER_IID               = 21,  ///< meshcop Joiner IID TLV
-    OT_MESHCOP_TLV_JOINER_RLOC              = 22,  ///< meshcop Joiner Router Locator TLV
-    OT_MESHCOP_TLV_JOINER_ROUTER_KEK        = 23,  ///< meshcop Joiner Router KEK TLV
-    OT_MESHCOP_TLV_DURATION                 = 24,  ///< meshcop Duration TLV
+    OT_MESHCOP_TLV_EXTPANID                 = 2,   ///< meshcop Extended Pan Id TLV
+    OT_MESHCOP_TLV_NETWORKNAME              = 3,   ///< meshcop Network Name TLV
+    OT_MESHCOP_TLV_PSKC                     = 4,   ///< meshcop PSKc TLV
+    OT_MESHCOP_TLV_NETWORKKEY               = 5,   ///< meshcop Network Key TLV
+    OT_MESHCOP_TLV_NETWORK_KEY_SEQUENCE     = 6,   ///< meshcop Network Key Sequence TLV
+    OT_MESHCOP_TLV_MESHLOCALPREFIX          = 7,   ///< meshcop Mesh Local Prefix TLV
+    OT_MESHCOP_TLV_STEERING_DATA            = 8,   ///< meshcop Steering Data TLV
+    OT_MESHCOP_TLV_BORDER_AGENT_RLOC        = 9,   ///< meshcop Border Agent Locator TLV
+    OT_MESHCOP_TLV_COMMISSIONER_ID          = 10,  ///< meshcop Commissioner ID TLV
+    OT_MESHCOP_TLV_COMM_SESSION_ID          = 11,  ///< meshcop Commissioner Session ID TLV
+    OT_MESHCOP_TLV_SECURITYPOLICY           = 12,  ///< meshcop Security Policy TLV
+    OT_MESHCOP_TLV_GET                      = 13,  ///< meshcop Get TLV
+    OT_MESHCOP_TLV_ACTIVETIMESTAMP          = 14,  ///< meshcop Active Timestamp TLV
+    OT_MESHCOP_TLV_COMMISSIONER_UDP_PORT    = 15,  ///< meshcop Commissioner UDP Port TLV
+    OT_MESHCOP_TLV_STATE                    = 16,  ///< meshcop State TLV
+    OT_MESHCOP_TLV_JOINER_DTLS              = 17,  ///< meshcop Joiner DTLS Encapsulation TLV
+    OT_MESHCOP_TLV_JOINER_UDP_PORT          = 18,  ///< meshcop Joiner UDP Port TLV
+    OT_MESHCOP_TLV_JOINER_IID               = 19,  ///< meshcop Joiner IID TLV
+    OT_MESHCOP_TLV_JOINER_RLOC              = 20,  ///< meshcop Joiner Router Locator TLV
+    OT_MESHCOP_TLV_JOINER_ROUTER_KEK        = 21,  ///< meshcop Joiner Router KEK TLV
+    OT_MESHCOP_TLV_DURATION                 = 23,  ///< meshcop Duration TLV
     OT_MESHCOP_TLV_PROVISIONING_URL         = 32,  ///< meshcop Provisioning URL TLV
     OT_MESHCOP_TLV_VENDOR_NAME_TLV          = 33,  ///< meshcop Vendor Name TLV
     OT_MESHCOP_TLV_VENDOR_MODEL_TLV         = 34,  ///< meshcop Vendor Model TLV
@@ -337,6 +335,8 @@ typedef enum otMeshcopTlvType
     OT_MESHCOP_TLV_DISCOVERYREQUEST         = 128, ///< meshcop Discovery Request TLV
     OT_MESHCOP_TLV_DISCOVERYRESPONSE        = 129, ///< meshcop Discovery Response TLV
     OT_MESHCOP_TLV_JOINERADVERTISEMENT      = 241, ///< meshcop Joiner Advertisement TLV (experimental)
+    OT_MESHCOP_TLV_PANIDS                   = 242,   ///< meshcop Pan Ids List TLV
+    OT_MESHCOP_TLV_PANKEYS                  = 243,   ///< meshcop Pan Keys List TLV
 } otMeshcopTlvType;
 
 /**

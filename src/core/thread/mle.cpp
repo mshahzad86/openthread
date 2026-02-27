@@ -3896,10 +3896,12 @@ Error Mle::TxMessage::SendTo(const Ip6::Address &aDestination)
         {
             // If child not found, use the router's PAN ID
             panId = Get<Mac::Mac>().GetPanId();
+            // panId = 0x7777; // For testing, use a fixed PAN ID to ensure encryption works even if child lookup fails
         }
 #else
         // For MTD builds, use the router's PAN ID
         panId = Get<Mac::Mac>().GetPanId();
+        // panId = 0x7777; // For testing, use a fixed PAN ID to ensure encryption works even if router PAN ID is not available
 #endif
 
         SuccessOrExit(error = Get<Mle>().ProcessMessageSecurity(Crypto::AesCcm::kEncrypt, *this, messageInfo, offset,
