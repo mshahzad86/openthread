@@ -44,6 +44,7 @@
 #include "meshcop/dataset.hpp"
 #include "net/udp6.hpp"
 #include "thread/tmf.hpp"
+#include "mac/mac_types.hpp"
 
 namespace ot {
 
@@ -103,6 +104,7 @@ public:
      * @retval kErrorNotFound  There is no corresponding dataset stored in non-volatile memory.
      */
     Error Read(Dataset &aDataset) const;
+    Error Read(Dataset &aDataset, bool aDisablePanIds, Mac::PanId panId) const;
 
     /**
      * Retrieves the dataset from non-volatile memory.

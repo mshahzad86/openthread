@@ -3967,37 +3967,106 @@ Error Mle::TxMessage::AppendDatasetTlv(MeshCoP::Dataset::Type aDatasetType)
     Error            error = kErrorNotFound;
     Tlv::Type        tlvType;
     MeshCoP::Dataset dataset;
+    PanId            panId = 0x7777;
 
     switch (aDatasetType)
     {
     case MeshCoP::Dataset::kActive:
-        error   = Get<MeshCoP::ActiveDatasetManager>().Read(dataset);
+        error   = Get<MeshCoP::ActiveDatasetManager>().Read(dataset,true,panId);
         tlvType = Tlv::kActiveDataset;
+        LogWarn("AppendDatasetTlv: Reading Active Dataset");
         break;
 
     case MeshCoP::Dataset::kPending:
         error   = Get<MeshCoP::PendingDatasetManager>().Read(dataset);
         tlvType = Tlv::kPendingDataset;
+        LogWarn("AppendDatasetTlv: Reading Pending Dataset");
         break;
     default:
+        LogWarn("AppendDatasetTlv: Unknown dataset type %u", aDatasetType);
         OT_ASSERT(false);
     }
 
     if (error != kErrorNone)
     {
-        // If there's no dataset, no need to append TLV. We'll treat it
-        // as success.
-
-        ExitNow(error = kErrorNone);
+        LogWarn("AppendDatasetTlv: Failed to read dataset, error = %d", error);
+        ExitNow();
     }
 
-    // Remove the Timestamp TLV from Dataset before appending to the
-    // message. The Timestamp is appended as its own MLE TLV to the
-    // message.
+    LogWarn("AppendDatasetTlv: Dataset read successfully, total length = %u bytes", dataset.GetLength());
 
+    // Log all TLVs present in the dataset
+    {
+        const MeshCoP::Tlv *tlv = dataset.GetTlvsStart();
+        while (tlv < dataset.GetTlvsEnd())
+        {
+            switch (tlv->GetType())
+            {
+            case MeshCoP::Tlv::kActiveTimestamp:
+                LogWarn("  TLV: ActiveTimestamp, length = %u", tlv->GetLength());
+                break;
+            case MeshCoP::Tlv::kPendingTimestamp:
+                LogWarn("  TLV: PendingTimestamp, length = %u", tlv->GetLength());
+                break;
+            case MeshCoP::Tlv::kNetworkKey:
+                LogWarn("  TLV: NetworkKey, length = %u", tlv->GetLength());
+                break;
+            case MeshCoP::Tlv::kNetworkName:
+                LogWarn("  TLV: NetworkName, length = %u, value = %.*s", 
+                        tlv->GetLength(), tlv->GetLength(), tlv->GetValue());
+                break;
+            case MeshCoP::Tlv::kExtendedPanId:
+                LogWarn("  TLV: ExtendedPanId, length = %u", tlv->GetLength());
+                break;
+            case MeshCoP::Tlv::kMeshLocalPrefix:
+                LogWarn("  TLV: MeshLocalPrefix, length = %u", tlv->GetLength());
+                break;
+            case MeshCoP::Tlv::kDelayTimer:
+                LogWarn("  TLV: DelayTimer, length = %u", tlv->GetLength());
+                break;
+            case MeshCoP::Tlv::kPanId:
+                LogWarn("  TLV: PanId, length = %u", tlv->GetLength());
+                break;
+            case MeshCoP::Tlv::kChannel:
+                LogWarn("  TLV: Channel, length = %u", tlv->GetLength());
+                break;
+            case MeshCoP::Tlv::kChannelMask:
+                LogWarn("  TLV: ChannelMask, length = %u", tlv->GetLength());
+                break;
+            case MeshCoP::Tlv::kSecurityPolicy:
+                LogWarn("  TLV: SecurityPolicy, length = %u", tlv->GetLength());
+                break;
+            case MeshCoP::Tlv::kPskc:
+                LogWarn("  TLV: PSKc, length = %u", tlv->GetLength());
+                break;
+            case MeshCoP::Tlv::kPanIds:
+                LogWarn("  TLV: PanIds (CUSTOM), length = %u", tlv->GetLength());
+                break;
+            case MeshCoP::Tlv::kPanKeys:
+                LogWarn("  TLV: PanKeys (CUSTOM), length = %u", tlv->GetLength());
+                break;
+            default:
+                LogWarn("  TLV: Unknown type 0x%02x, length = %u", tlv->GetType(), tlv->GetLength());
+                break;
+            }
+            tlv = tlv->GetNext();
+        }
+    }
+
+    // Remove the Timestamp TLV from Dataset before appending to the message
     dataset.RemoveTimestamp(aDatasetType);
+    LogWarn("AppendDatasetTlv: After removing timestamp, length = %u bytes", dataset.GetLength());
 
     error = Tlv::AppendTlv(*this, tlvType, dataset.GetBytes(), dataset.GetLength());
+    
+    if (error == kErrorNone)
+    {
+        LogWarn("AppendDatasetTlv: Successfully appended Dataset TLV type 0x%02x", tlvType);
+    }
+    else
+    {
+        LogWarn("AppendDatasetTlv: Failed to append TLV, error = %d", error);
+    }
 
 exit:
     return error;

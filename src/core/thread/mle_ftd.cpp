@@ -2058,6 +2058,8 @@ bool Mle::IsMessageChildUpdateRequest(const Message &aMessage)
     return aMessage.IsMleCommand(kCommandChildUpdateRequest);
 }
 
+
+//Something here
 void Mle::HandleChildIdRequest(RxInfo &aRxInfo)
 {
     Error              error = kErrorNone;
@@ -2874,16 +2876,22 @@ exit:
     return error;
 }
 
+
+//This log is last
 Error Mle::SendChildIdResponse(Child &aChild)
 {
     Error        error = kErrorNone;
     Ip6::Address destination;
     TxMessage   *message;
-
+    LogWarn("SendChildIdResponse: Starting Child ID Response for child");
     VerifyOrExit((message = NewMleMessage(kCommandChildIdResponse)) != nullptr, error = kErrorNoBufs);
+    LogWarn("SendChildIdResponse: Message created successfully");
     SuccessOrExit(error = message->AppendSourceAddressTlv());
+    LogWarn("SendChildIdResponse: AppendSourceAddressTlv - OK");
     SuccessOrExit(error = message->AppendLeaderDataTlv());
+    LogWarn("SendChildIdResponse: AppendLeaderDataTlv - OK");
     SuccessOrExit(error = message->AppendActiveAndPendingTimestampTlvs());
+    LogWarn("SendChildIdResponse: AppendActiveAndPendingTimestampTlvs - OK");
 
     if ((aChild.GetRloc16() == 0) || !HasMatchingRouterIdWith(aChild.GetRloc16()))
     {
@@ -2898,25 +2906,33 @@ Error Mle::SendChildIdResponse(Child &aChild)
         {
         case Tlv::kNetworkData:
             SuccessOrExit(error = message->AppendNetworkDataTlv(aChild.GetNetworkDataType()));
+            LogWarn("Switch Case: kNetworkData - OK");
             break;
 
         case Tlv::kRoute:
             SuccessOrExit(error = message->AppendRouteTlv());
+            LogWarn("Switch Case: kRoute - OK");
             break;
 
         case Tlv::kActiveDataset:
+        //Print contents here
             SuccessOrExit(error = message->AppendActiveDatasetTlv());
+            LogWarn("Switch Case: kActiveDataset - OK");
             break;
 
         case Tlv::kPendingDataset:
+        //Print contents here
             SuccessOrExit(error = message->AppendPendingDatasetTlv());
+            LogWarn("Switch Case: kPendingDataset - OK");
             break;
 
         case Tlv::kSupervisionInterval:
             SuccessOrExit(error = message->AppendSupervisionIntervalTlv(aChild.GetSupervisionInterval()));
+            LogWarn("Switch Case: kSupervisionInterval - OK");
             break;
 
         default:
+            LogWarn("Switch Case: default - OK");
             break;
         }
     }

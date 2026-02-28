@@ -221,6 +221,10 @@ Error Settings::ReadOperationalDataset(MeshCoP::Dataset::Type aType, MeshCoP::Da
     aDataset.SetLength(static_cast<uint8_t>(length));
 
 exit:
+    if (error != kErrorNone)
+    {
+        LogWarn("ReadOperationalDataset failed: aType=%d, error=%s", aType, ErrorToString(error));
+    }
     return error;
 }
 

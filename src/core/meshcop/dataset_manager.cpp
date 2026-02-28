@@ -118,6 +118,47 @@ Error DatasetManager::Read(Dataset &aDataset) const
     {
         Tlv *tlv = aDataset.FindTlv(Tlv::kDelayTimer);
 
+        VerifyOrExit(tlv != nullptr, error = kErrorNotFound);
+        tlv->WriteValueAs<DelayTimerTlv>(DelayTimerTlv::CalculateRemainingDelay(*tlv, mLocalUpdateTime));
+    }
+
+    aDataset.mUpdateTime = TimerMilli::GetNow();
+
+exit:
+    if (error != kErrorNone)
+    {
+        LogWarn("Read failed: mType=%d, error=%s", mType, ErrorToString(error));
+    }
+    return error;
+}
+
+Error DatasetManager::Read(Dataset &aDataset, bool aDisablePanIds, Mac::PanId panId) const
+{
+    Error error;
+
+    aDataset.Clear();
+
+    SuccessOrExit(error = Get<Settings>().ReadOperationalDataset(mType, aDataset));
+
+#if OPENTHREAD_CONFIG_PLATFORM_KEY_REFERENCES_ENABLE
+    EmplaceSecurelyStoredKeys(aDataset);
+#endif
+
+    if (aDisablePanIds)
+    {
+        aDataset.RemoveTlv(Tlv::kPanId);
+        SuccessOrExit(error = aDataset.Write<PanIdTlv>(panId));
+    }
+
+    if (mType == Dataset::kActive)
+    {
+        aDataset.RemoveTlv(Tlv::kPendingTimestamp);
+        aDataset.RemoveTlv(Tlv::kDelayTimer);
+    }
+    else
+    {
+        Tlv *tlv = aDataset.FindTlv(Tlv::kDelayTimer);
+
         VerifyOrExit(tlv != nullptr);
         tlv->WriteValueAs<DelayTimerTlv>(DelayTimerTlv::CalculateRemainingDelay(*tlv, mLocalUpdateTime));
     }
@@ -127,7 +168,6 @@ Error DatasetManager::Read(Dataset &aDataset) const
 exit:
     return error;
 }
-
 Error DatasetManager::Read(Dataset::Info &aDatasetInfo) const
 {
     Dataset dataset;
