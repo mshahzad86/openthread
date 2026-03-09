@@ -251,7 +251,7 @@ extern "C" OT_TOOL_WEAK void otPlatRadioSetMacKeySingle(otInstance             *
     OT_UNUSED_VARIABLE(aKeyType);
 }
 
-extern "C" OT_TOOL_WEAK void otPlatRadioSetMacKeyMap(otInstance           *aInstance,
+extern "C" OT_TOOL_WEAK void otPlatRadioSetMacKey(otInstance           *aInstance,
                                                      uint8_t               aKeyIdMode,
                                                      uint8_t               aKeyId,
                                                      otPanIdKeyMaterialMap aPanIdKeyMaterials,

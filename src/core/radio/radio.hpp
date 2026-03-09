@@ -982,7 +982,7 @@ inline void Radio::SetMacKey(uint8_t                 aKeyIdMode,
         cPanIdKeyMaterials[i].prevMacKey = aPanIdKeyMaterials[i].prevMacKey;
         cPanIdKeyMaterials[i].nextMacKey = aPanIdKeyMaterials[i].nextMacKey;
     }
-    otPlatRadioSetMacKeyMap(GetInstancePtr(), aKeyIdMode, aKeyId, cPanIdKeyMaterials, aKeyType);
+    otPlatRadioSetMacKey(GetInstancePtr(), aKeyIdMode, aKeyId, cPanIdKeyMaterials, aKeyType);
 }
 
 inline Error Radio::GetTransmitPower(int8_t &aPower) { return otPlatRadioGetTransmitPower(GetInstancePtr(), &aPower); }
