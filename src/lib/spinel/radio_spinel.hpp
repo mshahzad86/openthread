@@ -36,6 +36,7 @@
 
 #include <openthread/platform/diag.h>
 #include <openthread/platform/radio.h>
+#include <src/core/config/multipan.h>
 
 #include "openthread-spinel-config.h"
 #include "core/radio/max_power_table.hpp"
@@ -57,7 +58,6 @@ struct PanIdKey
     otMacKey    nextMacKey;
 };
 
-static constexpr uint8_t kMaxPanKeys = 64;
 using PanIdKeyMap = PanIdKey[kMaxPanKeys];
 
 struct RadioSpinelCallbacks
