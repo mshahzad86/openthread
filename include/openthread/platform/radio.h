@@ -794,7 +794,7 @@ void otPlatRadioSetMacKeySingle(otInstance             *aInstance,
  * @param[in]   aPanIdKeyMaterials     A pointer to the map of Pan ID and MAC key.
  * @param[in]   aKeyType               Key Type used.
  */
-void otPlatRadioSetMacKeyMap(otInstance            *aInstance,
+void otPlatRadioSetMacKey(otInstance            *aInstance,
                              uint8_t               aKeyIdMode,
                              uint8_t               aKeyId,
                              otPanIdKeyMaterialMap aPanIdKeyMaterials,

@@ -174,8 +174,34 @@ start:
             frameInfo.mKeyIdMode = Mac::Frame::kKeyIdMode1;
         }
     }
+#if OPENTHREAD_FTD
+     // Check if destination is a child device and get its PAN ID
 
+
+    Neighbor *neighbor = Get<NeighborTable>().FindNeighbor(aMacAddrs.mDestination);
+    if (neighbor != nullptr && neighbor->IsStateValid())
+    {
+        // If it's a child device, use its PAN ID
+        if (Get<ChildTable>().Contains(*neighbor))
+        {
+            const Child *child = static_cast<const Child *>(neighbor);
+            frameInfo.mPanIds.SetBothSourceDestination(child->GetPanId());  // Use child's PAN ID
+        }
+        else
+        {
+            // For non-child devices, use the router's PAN ID
+            frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+        }
+    }
+    else
+    {
+        // Default to router's PAN ID if neighbor not found
+        frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+    }
+#else
+    // For non-FTD builds, always use the router's PAN ID
     frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+#endif
 
     if (aMessage.IsSubTypeMle())
     {
@@ -328,7 +354,7 @@ start:
     }
 
     // Copy IPv6 Payload
-    SuccessOrAssert(frameBuilder.AppendBytesFromMessage(aMessage, aMessage.GetOffset(), payloadLength));
+    SuccessOrExit(frameBuilder.AppendBytesFromMessage(aMessage, aMessage.GetOffset(), payloadLength));
     aFrame.SetPayloadLength(frameBuilder.GetLength());
 
     nextOffset = aMessage.GetOffset() + payloadLength;
@@ -342,7 +368,8 @@ start:
     }
 
     aMessage.SetOffset(origMsgOffset);
-
+    
+exit:
     return nextOffset;
 }
 

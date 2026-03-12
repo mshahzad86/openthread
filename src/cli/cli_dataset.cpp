@@ -35,7 +35,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-
 #include <openthread/dataset.h>
 #include <openthread/dataset_ftd.h>
 #include <openthread/dataset_updater.h>
@@ -600,20 +599,22 @@ exit:
 otError Dataset::ParsePanKeys(Arg *&aArgs, otOperationalDataset &aDataset)
 {
     otError error = OT_ERROR_NONE;
+    otPanKeyList panKeys = {};
     uint8_t count = 0;
-
-    // Clear existing PAN Keys
-    memset(&aDataset.mPanKeys, 0, sizeof(aDataset.mPanKeys));
 
     // Parse all PAN Keys from command line
     while (!aArgs->IsEmpty() && count < OT_MAX_PAN_KEYS)
     {
-        SuccessOrExit(error = aArgs->ParseAsHexString(aDataset.mPanKeys.mPanKeys[count].m8));
+        SuccessOrExit(error = aArgs->ParseAsHexString(panKeys.mPanKeys[count].m8));
         aArgs++;
         count++;
     }
+    panKeys.mCount = count;
 
-    // Set presence flag if we have any PAN Keys
+    // Directly set the keys in KeyManager, skipping TLV handling
+    AsCoreType(GetInstancePtr()).Get<KeyManager>().SetPanKeys(panKeys);
+
+    // Optionally, set presence flag in dataset if needed for CLI output
     aDataset.mComponents.mIsPanKeysPresent = (count > 0);
     aDataset.mPanKeys.mCount = count;
 
@@ -699,6 +700,14 @@ otError Dataset::ProcessCommand(const ComponentMapper &aMapper, Arg aArgs[])
     }
     else
     {
+        // Special-case: if this is the pankeys set command, bypass TLV/dataset update logic
+        if (aMapper.mParse == &Dataset::ParsePanKeys)
+        {
+            ClearAllBytes(dataset);
+            SuccessOrExit(error = (this->*aMapper.mParse)(aArgs, dataset));
+            // Do NOT update TLVs or dataset buffer, just return
+            return error;
+        }
         ClearAllBytes(dataset);
         SuccessOrExit(error = (this->*aMapper.mParse)(aArgs, dataset));
         dataset.mComponents.*aMapper.mIsPresentPtr = true;
@@ -1464,6 +1473,7 @@ otError Dataset::Process(Arg aArgs[])
      * networkkey
      * networkname
      * panid
+     * pankeys
      * pending
      * pendingtimestamp
      * pskc
