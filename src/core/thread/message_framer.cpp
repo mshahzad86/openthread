@@ -240,6 +240,10 @@ start:
             frameInfo.mPanIds.SetDestination(aMessage.GetPanId());
             frameInfo.mPanIds.SetSource(0x5678);
 
+            // TODO: Discovery Response can't look up the joiner's PAN ID because the joiner uses a random MAC address 
+            // during MLE Discovery (set in Seeker::Start() before the scan), so neither its EUI-64 nor Joiner ID is 
+            // available to match against the device assignment table. Find a way to the pan id from device assignment 
+            // table as the source pan id.
             const DeviceAssignment *assignment = FindDeviceAssignmentByJoinerId(aMacAddrs.mDestination.GetExtended());
 
             if (assignment != nullptr)
