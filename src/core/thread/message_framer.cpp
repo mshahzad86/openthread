@@ -34,8 +34,11 @@
 #include "message_framer.hpp" 
 
 #include "instance/instance.hpp"
+#include "thread/device_assignment.hpp"
 
 namespace ot {
+
+RegisterLogModule("MsgFramer");
 
 MessageFramer::MessageFramer(Instance &aInstance)
     : InstanceLocator(aInstance)
@@ -189,17 +192,32 @@ start:
         }
         else
         {
-            // For non-child devices, use the router's PAN ID
             frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
         }
     }
     else
     {
-        // Default to router's PAN ID if neighbor not found
-        frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+        // Look up by Joiner ID for commissioning frames
+        if (aMacAddrs.mDestination.IsExtended())
+        {
+            const DeviceAssignment *assignment = FindDeviceAssignmentByJoinerId(aMacAddrs.mDestination.GetExtended());
+
+            if (assignment != nullptr)
+            {
+                LogWarn("#### Found matching device assignment for pan id");
+                frameInfo.mPanIds.SetBothSourceDestination(assignment->mPanId);
+            }
+            else
+            {
+                frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+            }
+        }
+        else
+        {
+            frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+        }
     }
 #else
-    // For non-FTD builds, always use the router's PAN ID
     frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
 #endif
 
@@ -214,9 +232,25 @@ start:
             break;
 
         case Mle::kCommandDiscoveryRequest:
-        case Mle::kCommandDiscoveryResponse:
             frameInfo.mPanIds.SetDestination(aMessage.GetPanId());
             break;
+
+        case Mle::kCommandDiscoveryResponse:
+        {
+            frameInfo.mPanIds.SetDestination(aMessage.GetPanId());
+            frameInfo.mPanIds.SetSource(0x5678);
+
+            const DeviceAssignment *assignment = FindDeviceAssignmentByJoinerId(aMacAddrs.mDestination.GetExtended());
+
+            if (assignment != nullptr)
+            {
+                LogWarn("#### Using PAN ID 0x%04x for MLE Discovery Response to joiner %s",
+                        assignment->mPanId, aMacAddrs.mDestination.GetExtended().ToString().AsCString());
+                frameInfo.mPanIds.SetSource(assignment->mPanId);
+            }
+
+            break;
+        }
 
         default:
             break;

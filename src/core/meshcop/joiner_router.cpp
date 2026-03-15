@@ -36,6 +36,7 @@
 #if OPENTHREAD_FTD
 
 #include "instance/instance.hpp"
+#include "thread/device_assignment.hpp"
 
 namespace ot {
 namespace MeshCoP {
@@ -255,7 +256,7 @@ Error JoinerRouter::SendJoinerEntrust(const Ip6::MessageInfo &aMessageInfo)
     Error          error = kErrorNone;
     Coap::Message *message;
 
-    message = PrepareJoinerEntrustMessage();
+    message = PrepareJoinerEntrustMessage(aMessageInfo.GetPeerAddr().GetIid());
     VerifyOrExit(message != nullptr, error = kErrorNoBufs);
 
     IgnoreError(Get<Tmf::Agent>().AbortTransaction(HandleJoinerEntrustResponse, this));
@@ -270,7 +271,7 @@ exit:
     return error;
 }
 
-Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(void)
+Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(const Ip6::InterfaceIdentifier &aJoinerIid)
 {
     static const Tlv::Type kTlvTypes[] = {
         Tlv::kNetworkKey,      Tlv::kMeshLocalPrefix, Tlv::kExtendedPanId, Tlv::kNetworkName,
@@ -287,6 +288,25 @@ Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(void)
     message->SetSubType(Message::kSubTypeJoinerEntrust);
 
     SuccessOrExit(error = Get<ActiveDatasetManager>().Read(dataset));
+
+    // Look up the joiner in the device assignment table and override
+    // the NetworkKey if a matching entry is found.
+    {
+        Mac::ExtAddress joinerId;
+
+        joinerId.SetFromIid(aJoinerIid);
+
+        const DeviceAssignment *assignment = FindDeviceAssignmentByJoinerId(joinerId);
+
+        if (assignment != nullptr)
+        {
+            NetworkKey overrideKey;
+
+            memcpy(overrideKey.m8, assignment->mNetworkKey, NetworkKey::kSize);
+            dataset.Write<NetworkKeyTlv>(overrideKey);
+            LogInfo("#### Overriding NetworkKey for joiner from device assignment table");
+        }
+    }
 
     for (Tlv::Type tlvType : kTlvTypes)
     {
