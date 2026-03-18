@@ -2864,7 +2864,6 @@ exit:
     return error;
 }
 
-// Multipan device assignment table: maps EUI-64 -> (PAN ID, Network Key)
 Error Mle::SendChildIdResponse(Child &aChild)
 {
     Error        error = kErrorNone;
@@ -2898,7 +2897,7 @@ Error Mle::SendChildIdResponse(Child &aChild)
         case Tlv::kActiveDataset:
         {
             MeshCoP::Dataset        dataset;
-            const DeviceAssignment *assignment = FindDeviceAssignment(aChild.GetExtAddress());
+            const DeviceAssignment *assignment = FindDeviceAssignmentByPanId(aChild.GetPanId());
 
             error = Get<MeshCoP::ActiveDatasetManager>().Read(dataset);
 
@@ -2912,10 +2911,6 @@ Error Mle::SendChildIdResponse(Child &aChild)
                     IgnoreError(dataset.Write<MeshCoP::PanIdTlv>(assignment->mPanId));
                     IgnoreError(dataset.Write<MeshCoP::NetworkKeyTlv>(networkKey));
 
-                    aChild.SetPanId(assignment->mPanId);
-
-                    LogInfo("Multipan: Assigning PAN 0x%04x to child %s", assignment->mPanId,
-                            aChild.GetExtAddress().ToString().AsCString());
                 }
 
                 dataset.RemoveTimestamp(MeshCoP::Dataset::kActive);

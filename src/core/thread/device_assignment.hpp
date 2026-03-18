@@ -68,6 +68,19 @@ inline const DeviceAssignment *FindDeviceAssignmentByJoinerId(const Mac::ExtAddr
     return nullptr;
 }
 
+inline const DeviceAssignment *FindDeviceAssignmentByPanId(uint16_t aPanId)
+{
+    for (const auto &entry : sDeviceTable)
+    {
+        if (entry.mPanId == aPanId)
+        {
+            return &entry;
+        }
+    }
+
+    return nullptr;
+}
+
 } // namespace ot
 
 #endif // DEVICE_ASSIGNMENT_HPP_
