@@ -50,11 +50,10 @@ inline const PanIdAssignment *FindPanIdAssignment(uint16_t aPanId)
 
 #if OPENTHREAD_FTD
 
-// Round-robin allocator: returns the next PanIdAssignment whose PAN ID
-// is not currently held by any child in aChildTable.  A static index
-// ensures consecutive calls hand out different entries even when both
-// callers run before either device appears in the child table.
-inline const PanIdAssignment *AllocateNextPanId(ChildTable &aChildTable)
+// Finds the next pool entry whose PAN ID is not held by any active child.
+// When aAdvance is true the round-robin index moves forward (allocation);
+// when false the index stays put (peek / preview).
+inline const PanIdAssignment *FindNextAvailablePanId(ChildTable &aChildTable, bool aAdvance)
 {
     static uint8_t sNextPoolIndex = 0;
 
@@ -75,12 +74,26 @@ inline const PanIdAssignment *AllocateNextPanId(ChildTable &aChildTable)
 
         if (!inUse)
         {
-            sNextPoolIndex = (index + 1) % kPanIdPoolSize;
+            if (aAdvance)
+            {
+                sNextPoolIndex = (index + 1) % kPanIdPoolSize;
+            }
+
             return &candidate;
         }
     }
 
     return nullptr;
+}
+
+inline const PanIdAssignment *AllocateNextPanId(ChildTable &aChildTable)
+{
+    return FindNextAvailablePanId(aChildTable, true);
+}
+
+inline const PanIdAssignment *PeekNextPanId(ChildTable &aChildTable)
+{
+    return FindNextAvailablePanId(aChildTable, false);
 }
 
 #endif // OPENTHREAD_FTD
