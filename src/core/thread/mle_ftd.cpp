@@ -2896,8 +2896,8 @@ Error Mle::SendChildIdResponse(Child &aChild)
 
         case Tlv::kActiveDataset:
         {
-            MeshCoP::Dataset        dataset;
-            const DeviceAssignment *assignment = FindDeviceAssignmentByPanId(aChild.GetPanId());
+            MeshCoP::Dataset      dataset;
+            const PanIdAssignment *assignment = AllocateNextPanId(mChildTable);
 
             error = Get<MeshCoP::ActiveDatasetManager>().Read(dataset);
 
@@ -2910,7 +2910,8 @@ Error Mle::SendChildIdResponse(Child &aChild)
                     memcpy(networkKey.m8, assignment->mNetworkKey, OT_NETWORK_KEY_SIZE);
                     IgnoreError(dataset.Write<MeshCoP::PanIdTlv>(assignment->mPanId));
                     IgnoreError(dataset.Write<MeshCoP::NetworkKeyTlv>(networkKey));
-
+                    aChild.SetPanId(assignment->mPanId);
+                    LogInfo("#### Allocated PAN 0x%04x for child", assignment->mPanId);
                 }
 
                 dataset.RemoveTimestamp(MeshCoP::Dataset::kActive);

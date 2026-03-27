@@ -36,7 +36,6 @@
 #if OPENTHREAD_FTD
 
 #include "instance/instance.hpp"
-#include "thread/device_assignment.hpp"
 
 namespace ot {
 namespace MeshCoP {
@@ -288,25 +287,6 @@ Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(const Ip6::InterfaceIde
     message->SetSubType(Message::kSubTypeJoinerEntrust);
 
     SuccessOrExit(error = Get<ActiveDatasetManager>().Read(dataset));
-
-    // Look up the joiner in the device assignment table and override
-    // the NetworkKey if a matching entry is found.
-    {
-        Mac::ExtAddress joinerId;
-
-        joinerId.SetFromIid(aJoinerIid);
-
-        const DeviceAssignment *assignment = FindDeviceAssignmentByJoinerId(joinerId);
-
-        if (assignment != nullptr)
-        {
-            NetworkKey overrideKey;
-
-            memcpy(overrideKey.m8, assignment->mNetworkKey, NetworkKey::kSize);
-            dataset.Write<NetworkKeyTlv>(overrideKey);
-            LogInfo("#### Overriding NetworkKey for joiner from device assignment table");
-        }
-    }
 
     for (Tlv::Type tlvType : kTlvTypes)
     {

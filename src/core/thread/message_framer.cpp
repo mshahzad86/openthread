@@ -34,7 +34,6 @@
 #include "message_framer.hpp" 
 
 #include "instance/instance.hpp"
-#include "thread/device_assignment.hpp"
 
 namespace ot {
 
@@ -214,25 +213,7 @@ start:
     }
     else
     {
-        // Look up by Joiner ID for commissioning frames
-        if (aMacAddrs.mDestination.IsExtended())
-        {
-            const DeviceAssignment *assignment = FindDeviceAssignmentByJoinerId(aMacAddrs.mDestination.GetExtended());
-
-            if (assignment != nullptr)
-            {
-                LogWarn("#### Found matching device assignment for pan id");
-                frameInfo.mPanIds.SetBothSourceDestination(assignment->mPanId);
-            }
-            else
-            {
-                frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
-            }
-        }
-        else
-        {
-            frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
-        }
+        frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
     }
 #else
     frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
@@ -253,25 +234,9 @@ start:
             break;
 
         case Mle::kCommandDiscoveryResponse:
-        {
             frameInfo.mPanIds.SetDestination(aMessage.GetPanId());
-            frameInfo.mPanIds.SetSource(0x5678);
-
-            // TODO: Discovery Response can't look up the joiner's PAN ID because the joiner uses a random MAC address 
-            // during MLE Discovery (set in Seeker::Start() before the scan), so neither its EUI-64 nor Joiner ID is 
-            // available to match against the device assignment table. Find a way to the pan id from device assignment 
-            // table as the source pan id.
-            const DeviceAssignment *assignment = FindDeviceAssignmentByJoinerId(aMacAddrs.mDestination.GetExtended());
-
-            if (assignment != nullptr)
-            {
-                LogWarn("#### Using PAN ID 0x%04x for MLE Discovery Response to joiner %s",
-                        assignment->mPanId, aMacAddrs.mDestination.GetExtended().ToString().AsCString());
-                frameInfo.mPanIds.SetSource(assignment->mPanId);
-            }
-
+            frameInfo.mPanIds.SetSource(Get<Mac::Mac>().GetPanId());
             break;
-        }
 
         default:
             break;
