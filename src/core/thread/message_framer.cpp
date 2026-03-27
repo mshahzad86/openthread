@@ -34,7 +34,6 @@
 #include "message_framer.hpp" 
 
 #include "instance/instance.hpp"
-#include "thread/device_assignment.hpp"
 
 namespace ot {
 
@@ -236,16 +235,7 @@ start:
 
         case Mle::kCommandDiscoveryResponse:
             frameInfo.mPanIds.SetDestination(aMessage.GetPanId());
-#if OPENTHREAD_FTD
-        {
-            const PanIdAssignment *assignment = PeekNextPanId(Get<ChildTable>());
-
-            frameInfo.mPanIds.SetSource(
-                (assignment != nullptr) ? assignment->mPanId : Get<Mac::Mac>().GetPanId());
-        }
-#else
             frameInfo.mPanIds.SetSource(Get<Mac::Mac>().GetPanId());
-#endif
             break;
 
         default:
