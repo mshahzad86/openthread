@@ -36,6 +36,7 @@
 #if OPENTHREAD_FTD
 
 #include "instance/instance.hpp"
+#include "thread/device_assignment.hpp"
 
 namespace ot {
 namespace MeshCoP {
@@ -48,6 +49,7 @@ JoinerRouter::JoinerRouter(Instance &aInstance)
     , mTimer(aInstance)
     , mJoinerUdpPort(0)
     , mIsJoinerPortConfigured(false)
+    , mHasPendingPanId(false)
 {
 }
 
@@ -288,6 +290,25 @@ Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(const Ip6::InterfaceIde
 
     SuccessOrExit(error = Get<ActiveDatasetManager>().Read(dataset));
 
+    {
+        const PanIdAssignment *assignment = AllocateNextPanId(Get<ChildTable>());
+
+        if (assignment != nullptr)
+        {
+            NetworkKey overrideKey;
+
+            memcpy(overrideKey.m8, assignment->mNetworkKey, NetworkKey::kSize);
+            dataset.Write<NetworkKeyTlv>(overrideKey);
+
+            mPendingPanId.mJoinerIid = aJoinerIid;
+            mPendingPanId.mPanId     = assignment->mPanId;
+            mHasPendingPanId         = true;
+
+            LogInfo("#### Allocated PAN 0x%04x / NetworkKey for joiner, PAN ID deferred to Child ID Response",
+                    assignment->mPanId);
+        }
+    }
+
     for (Tlv::Type tlvType : kTlvTypes)
     {
         const Tlv *tlv = dataset.FindTlv(tlvType);
@@ -301,6 +322,23 @@ Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(const Ip6::InterfaceIde
 exit:
     FreeAndNullMessageOnError(message, error);
     return message;
+}
+
+bool JoinerRouter::LookupPendingPanId(const Ip6::InterfaceIdentifier &aJoinerIid, uint16_t &aPanId)
+{
+    bool found = false;
+
+    VerifyOrExit(mHasPendingPanId);
+
+    if (mPendingPanId.mJoinerIid == aJoinerIid)
+    {
+        aPanId           = mPendingPanId.mPanId;
+        mHasPendingPanId = false;
+        found            = true;
+    }
+
+exit:
+    return found;
 }
 
 void JoinerRouter::HandleJoinerEntrustResponse(Coap::Msg *aMsg, Error aResult)

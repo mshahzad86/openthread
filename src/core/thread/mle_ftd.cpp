@@ -2897,7 +2897,24 @@ Error Mle::SendChildIdResponse(Child &aChild)
         case Tlv::kActiveDataset:
         {
             MeshCoP::Dataset      dataset;
-            const PanIdAssignment *assignment = AllocateNextPanId(mChildTable);
+            const PanIdAssignment *assignment = nullptr;
+            uint16_t               pendingPanId;
+
+            {
+                Ip6::InterfaceIdentifier childIid;
+
+                childIid.SetFromExtAddress(aChild.GetExtAddress());
+
+                if (Get<MeshCoP::JoinerRouter>().LookupPendingPanId(childIid, pendingPanId))
+                {
+                    assignment = FindPanIdAssignment(pendingPanId);
+                }
+            }
+
+            if (assignment == nullptr)
+            {
+                assignment = AllocateNextPanId(mChildTable);
+            }
 
             error = Get<MeshCoP::ActiveDatasetManager>().Read(dataset);
 
@@ -2911,7 +2928,7 @@ Error Mle::SendChildIdResponse(Child &aChild)
                     IgnoreError(dataset.Write<MeshCoP::PanIdTlv>(assignment->mPanId));
                     IgnoreError(dataset.Write<MeshCoP::NetworkKeyTlv>(networkKey));
                     aChild.SetPanId(assignment->mPanId);
-                    LogInfo("#### Allocated PAN 0x%04x for child", assignment->mPanId);
+                    LogInfo("#### Assigned PAN 0x%04x for child", assignment->mPanId);
                 }
 
                 dataset.RemoveTimestamp(MeshCoP::Dataset::kActive);

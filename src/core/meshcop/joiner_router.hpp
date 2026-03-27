@@ -81,6 +81,17 @@ public:
      */
     void SetJoinerUdpPort(uint16_t aJoinerUdpPort);
 
+    /**
+     * Looks up the PAN ID allocated during commissioning for a given joiner IID.
+     *
+     * @param[in]  aJoinerIid  The joiner's interface identifier.
+     * @param[out] aPanId      The allocated PAN ID (valid only when returning true).
+     *
+     * @retval true   A pending PAN ID was found and returned in @p aPanId.
+     * @retval false  No pending PAN ID exists for @p aJoinerIid.
+     */
+    bool LookupPendingPanId(const Ip6::InterfaceIdentifier &aJoinerIid, uint16_t &aPanId);
+
 private:
     static constexpr uint16_t kDefaultJoinerUdpPort = OPENTHREAD_CONFIG_JOINER_UDP_PORT;
     static constexpr uint32_t kJoinerEntrustTxDelay = 50; // in msec
@@ -119,6 +130,15 @@ private:
     uint16_t mJoinerUdpPort;
 
     bool mIsJoinerPortConfigured : 1;
+    bool mHasPendingPanId : 1;
+
+    struct PendingPanId
+    {
+        Ip6::InterfaceIdentifier mJoinerIid;
+        uint16_t                 mPanId;
+    };
+
+    PendingPanId mPendingPanId;
 };
 
 DeclareTmfHandler(JoinerRouter, kUriRelayTx);
