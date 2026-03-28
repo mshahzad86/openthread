@@ -2900,15 +2900,20 @@ Error Mle::SendChildIdResponse(Child &aChild)
             const PanIdAssignment *assignment = nullptr;
             uint16_t               pendingPanId;
             Ip6::InterfaceIdentifier dummyIid;
+            KeyManager            &keyMgr = Get<KeyManager>();
 
             if (Get<MeshCoP::JoinerRouter>().LookupPendingPanId(dummyIid, pendingPanId))
             {
-                assignment = FindPanIdAssignment(pendingPanId);
+                assignment = FindPanIdAssignment(keyMgr.GetPanIdPool(),
+                                                 keyMgr.GetPanIdPoolSize(),
+                                                 pendingPanId);
             }
 
             if (assignment == nullptr)
             {
-                assignment = AllocateNextPanId(mChildTable);
+                assignment = AllocateNextPanId(keyMgr.GetPanIdPool(),
+                                               keyMgr.GetPanIdPoolSize(),
+                                               mChildTable);
             }
 
             error = Get<MeshCoP::ActiveDatasetManager>().Read(dataset);

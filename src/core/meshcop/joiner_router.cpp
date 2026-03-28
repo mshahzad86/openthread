@@ -276,7 +276,10 @@ uint16_t JoinerRouter::GetOrAllocateNextPanId(void)
 {
     if (!mHasPendingPanId)
     {
-        const PanIdAssignment *assignment = AllocateNextPanId(Get<ChildTable>());
+        KeyManager            &keyMgr     = Get<KeyManager>();
+        const PanIdAssignment *assignment = AllocateNextPanId(keyMgr.GetPanIdPool(),
+                                                              keyMgr.GetPanIdPoolSize(),
+                                                              Get<ChildTable>());
 
         if (assignment != nullptr)
         {
@@ -308,8 +311,11 @@ Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(const Ip6::InterfaceIde
     SuccessOrExit(error = Get<ActiveDatasetManager>().Read(dataset));
 
     {
+        KeyManager            &keyMgr     = Get<KeyManager>();
         uint16_t               panId      = GetOrAllocateNextPanId();
-        const PanIdAssignment *assignment = FindPanIdAssignment(panId);
+        const PanIdAssignment *assignment = FindPanIdAssignment(keyMgr.GetPanIdPool(),
+                                                                keyMgr.GetPanIdPoolSize(),
+                                                                panId);
 
         if (assignment != nullptr)
         {
