@@ -243,7 +243,11 @@ start:
 
         case Mle::kCommandDiscoveryResponse:
             frameInfo.mPanIds.SetDestination(aMessage.GetPanId());
+#if OPENTHREAD_FTD
             frameInfo.mPanIds.SetSource(Get<MeshCoP::JoinerRouter>().GetOrAllocateNextPanId());
+#else
+            frameInfo.mPanIds.SetSource(Get<Mac::Mac>().GetPanId());
+#endif
             break;
 
         default:
