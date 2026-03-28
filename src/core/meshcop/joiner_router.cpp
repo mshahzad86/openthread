@@ -272,6 +272,23 @@ exit:
     return error;
 }
 
+uint16_t JoinerRouter::GetOrAllocateNextPanId(void)
+{
+    if (!mHasPendingPanId)
+    {
+        const PanIdAssignment *assignment = AllocateNextPanId(Get<ChildTable>());
+
+        if (assignment != nullptr)
+        {
+            mPendingPanId.mPanId = assignment->mPanId;
+            mHasPendingPanId     = true;
+            LogWarn("#### Pre-allocated PAN 0x%04x from pool for next joiner", assignment->mPanId);
+        }
+    }
+
+    return mHasPendingPanId ? mPendingPanId.mPanId : Get<Mac::Mac>().GetPanId();
+}
+
 Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(const Ip6::InterfaceIdentifier &aJoinerIid)
 {
     static const Tlv::Type kTlvTypes[] = {
@@ -291,7 +308,8 @@ Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(const Ip6::InterfaceIde
     SuccessOrExit(error = Get<ActiveDatasetManager>().Read(dataset));
 
     {
-        const PanIdAssignment *assignment = AllocateNextPanId(Get<ChildTable>());
+        uint16_t               panId      = GetOrAllocateNextPanId();
+        const PanIdAssignment *assignment = FindPanIdAssignment(panId);
 
         if (assignment != nullptr)
         {
@@ -301,11 +319,8 @@ Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(const Ip6::InterfaceIde
             dataset.Write<NetworkKeyTlv>(overrideKey);
 
             mPendingPanId.mJoinerIid = aJoinerIid;
-            mPendingPanId.mPanId     = assignment->mPanId;
-            mHasPendingPanId         = true;
 
-            LogInfo("#### Allocated PAN 0x%04x / NetworkKey for joiner, PAN ID deferred to Child ID Response",
-                    assignment->mPanId);
+            LogWarn("#### Entrust: using PAN 0x%04x / NetworkKey for joiner", assignment->mPanId);
         }
     }
 

@@ -213,7 +213,15 @@ start:
     }
     else
     {
-        frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+        if (aMacAddrs.mDestination.IsExtended())
+        {
+            uint16_t panId = Get<MeshCoP::JoinerRouter>().GetOrAllocateNextPanId();
+            frameInfo.mPanIds.SetBothSourceDestination(panId);
+        }
+        else
+        {
+            frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+        }
     }
 #else
     frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
@@ -235,7 +243,7 @@ start:
 
         case Mle::kCommandDiscoveryResponse:
             frameInfo.mPanIds.SetDestination(aMessage.GetPanId());
-            frameInfo.mPanIds.SetSource(Get<Mac::Mac>().GetPanId());
+            frameInfo.mPanIds.SetSource(Get<MeshCoP::JoinerRouter>().GetOrAllocateNextPanId());
             break;
 
         default:

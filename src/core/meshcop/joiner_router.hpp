@@ -82,7 +82,17 @@ public:
     void SetJoinerUdpPort(uint16_t aJoinerUdpPort);
 
     /**
+     * Returns the PAN ID allocated for the current commissioning session.
+     * Allocates from the pool on first call; subsequent calls return the same value.
+     * Falls back to the router's own PAN ID if the pool is exhausted.
+     *
+     * @returns The allocated PAN ID for the joiner being commissioned.
+     */
+    uint16_t GetOrAllocateNextPanId(void);
+
+    /**
      * Looks up the PAN ID allocated during commissioning for a given joiner IID.
+     * Consumes (clears) the pending entry so the next commissioning round re-allocates.
      *
      * @param[in]  aJoinerIid  The joiner's interface identifier.
      * @param[out] aPanId      The allocated PAN ID (valid only when returning true).
