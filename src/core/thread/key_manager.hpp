@@ -51,8 +51,8 @@
 #include "common/timer.hpp"
 #include "crypto/hmac_sha256.hpp"
 #include "mac/mac_types.hpp"
-#include "thread/device_assignment.hpp"
 #include "thread/mle_types.hpp"
+#include "thread/pan_id_assignment.hpp"
 
 namespace ot {
 

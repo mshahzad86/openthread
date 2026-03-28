@@ -6,19 +6,13 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "thread/pan_id_assignment.hpp"
+
 #if OPENTHREAD_FTD
 #include "thread/child_table.hpp"
 #endif
 
 namespace ot {
-
-static constexpr uint8_t kNetworkKeySize = 16;
-
-struct PanIdAssignment
-{
-    uint16_t mPanId;
-    uint8_t  mNetworkKey[kNetworkKeySize];
-};
 
 inline const PanIdAssignment *FindPanIdAssignment(const PanIdAssignment *aPool, uint8_t aPoolSize, uint16_t aPanId)
 {
