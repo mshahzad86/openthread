@@ -343,14 +343,13 @@ bool JoinerRouter::LookupPendingPanId(const Ip6::InterfaceIdentifier &aJoinerIid
 {
     bool found = false;
 
+    OT_UNUSED_VARIABLE(aJoinerIid);
+
     VerifyOrExit(mHasPendingPanId);
 
-    if (mPendingPanId.mJoinerIid == aJoinerIid)
-    {
-        aPanId           = mPendingPanId.mPanId;
-        mHasPendingPanId = false;
-        found            = true;
-    }
+    aPanId           = mPendingPanId.mPanId;
+    mHasPendingPanId = false;
+    found            = true;
 
 exit:
     return found;

@@ -2899,16 +2899,11 @@ Error Mle::SendChildIdResponse(Child &aChild)
             MeshCoP::Dataset      dataset;
             const PanIdAssignment *assignment = nullptr;
             uint16_t               pendingPanId;
+            Ip6::InterfaceIdentifier dummyIid;
 
+            if (Get<MeshCoP::JoinerRouter>().LookupPendingPanId(dummyIid, pendingPanId))
             {
-                Ip6::InterfaceIdentifier childIid;
-
-                childIid.SetFromExtAddress(aChild.GetExtAddress());
-
-                if (Get<MeshCoP::JoinerRouter>().LookupPendingPanId(childIid, pendingPanId))
-                {
-                    assignment = FindPanIdAssignment(pendingPanId);
-                }
+                assignment = FindPanIdAssignment(pendingPanId);
             }
 
             if (assignment == nullptr)
