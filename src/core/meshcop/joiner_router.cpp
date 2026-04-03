@@ -49,6 +49,7 @@ JoinerRouter::JoinerRouter(Instance &aInstance)
     , mTimer(aInstance)
     , mJoinerUdpPort(0)
     , mIsJoinerPortConfigured(false)
+    , mHasPendingPanId(false)
 {
 }
 
@@ -271,6 +272,26 @@ exit:
     return error;
 }
 
+uint16_t JoinerRouter::GetOrAllocateNextPanId(void)
+{
+    if (!mHasPendingPanId)
+    {
+        KeyManager            &keyMgr     = Get<KeyManager>();
+        const PanIdAssignment *assignment = AllocateNextPanId(keyMgr.GetPanIdPool(),
+                                                              keyMgr.GetPanIdPoolSize(),
+                                                              Get<ChildTable>());
+
+        if (assignment != nullptr)
+        {
+            mPendingPanId.mPanId = assignment->mPanId;
+            mHasPendingPanId     = true;
+            LogWarn("#### Pre-allocated PAN 0x%04x from pool for next joiner", assignment->mPanId);
+        }
+    }
+
+    return mHasPendingPanId ? mPendingPanId.mPanId : Get<Mac::Mac>().GetPanId();
+}
+
 Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(const Ip6::InterfaceIdentifier &aJoinerIid)
 {
     static const Tlv::Type kTlvTypes[] = {
@@ -289,14 +310,12 @@ Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(const Ip6::InterfaceIde
 
     SuccessOrExit(error = Get<ActiveDatasetManager>().Read(dataset));
 
-    // Look up the joiner in the device assignment table and override
-    // the NetworkKey if a matching entry is found.
     {
-        Mac::ExtAddress joinerId;
-
-        joinerId.SetFromIid(aJoinerIid);
-
-        const DeviceAssignment *assignment = FindDeviceAssignmentByJoinerId(joinerId);
+        KeyManager            &keyMgr     = Get<KeyManager>();
+        uint16_t               panId      = GetOrAllocateNextPanId();
+        const PanIdAssignment *assignment = FindPanIdAssignment(keyMgr.GetPanIdPool(),
+                                                                keyMgr.GetPanIdPoolSize(),
+                                                                panId);
 
         if (assignment != nullptr)
         {
@@ -304,7 +323,10 @@ Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(const Ip6::InterfaceIde
 
             memcpy(overrideKey.m8, assignment->mNetworkKey, NetworkKey::kSize);
             dataset.Write<NetworkKeyTlv>(overrideKey);
-            LogInfo("#### Overriding NetworkKey for joiner from device assignment table");
+
+            mPendingPanId.mJoinerIid = aJoinerIid;
+
+            LogWarn("#### Entrust: using PAN 0x%04x / NetworkKey for joiner", assignment->mPanId);
         }
     }
 
@@ -321,6 +343,22 @@ Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(const Ip6::InterfaceIde
 exit:
     FreeAndNullMessageOnError(message, error);
     return message;
+}
+
+bool JoinerRouter::LookupPendingPanId(const Ip6::InterfaceIdentifier &aJoinerIid, uint16_t &aPanId)
+{
+    bool found = false;
+
+    OT_UNUSED_VARIABLE(aJoinerIid);
+
+    VerifyOrExit(mHasPendingPanId);
+
+    aPanId           = mPendingPanId.mPanId;
+    mHasPendingPanId = false;
+    found            = true;
+
+exit:
+    return found;
 }
 
 void JoinerRouter::HandleJoinerEntrustResponse(Coap::Msg *aMsg, Error aResult)

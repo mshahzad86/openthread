@@ -52,6 +52,7 @@
 #include "crypto/hmac_sha256.hpp"
 #include "mac/mac_types.hpp"
 #include "thread/mle_types.hpp"
+#include "thread/pan_id_assignment.hpp"
 
 namespace ot {
 
@@ -574,7 +575,16 @@ public:
         }
         CheckForKeyRotation();
         UpdateKeyMaterial();
-    }  
+    }
+
+    /**
+     * Builds the PAN ID assignment pool from the router's own PAN ID / NetworkKey
+     * and the configured panids/pankeys lists from the dataset.
+     */
+    void BuildPanIdPool(void);
+
+    const PanIdAssignment *GetPanIdPool(void) const { return mPanIdPool; }
+    uint8_t                GetPanIdPoolSize(void) const { return mPanIdPoolSize; }
 
     /**
      * Handles MAC frame counter changes (callback from `SubMac` for 15.4 security frame change).
@@ -685,6 +695,10 @@ private:
     uint8_t    mPanKeyCount = 0;
     uint16_t   mPanIds[kMaxPanKeys] = {};
     NetworkKey mPanKeys[kMaxPanKeys];
+
+    // Dynamic pool: entry 0 = router's own, remaining from panids/pankeys
+    PanIdAssignment mPanIdPool[kMaxPanKeys + 1];
+    uint8_t         mPanIdPoolSize = 0;
     
 #if OPENTHREAD_CONFIG_WAKEUP_END_DEVICE_ENABLE
     Mle::KeyMaterial mTemporaryMacKey;

@@ -249,6 +249,8 @@ Error DatasetManager::ApplyConfiguration(const Dataset &aDataset) const
         }
     }
 
+    Get<KeyManager>().BuildPanIdPool();
+
 exit:
     return error;
 }
