@@ -380,21 +380,21 @@ void KeyManager::BuildPanIdPool(void)
 {
     mPanIdPoolSize = 0;
 
-    mPanIdPool[0].mPanId = Get<Mac::Mac>().GetPanId();
-    memcpy(mPanIdPool[0].mNetworkKey, mNetworkKey.m8, NetworkKey::kSize);
-    mPanIdPoolSize++;
-
     uint8_t count = OT_MIN(mPanIdCount, mPanKeyCount);
 
-    for (uint8_t i = 0; i < count && mPanIdPoolSize < kMaxPanKeys + 1; i++)
+    for (uint8_t i = 0; i < count && mPanIdPoolSize < kMaxPanKeys; i++)
     {
         mPanIdPool[mPanIdPoolSize].mPanId = mPanIds[i];
         memcpy(mPanIdPool[mPanIdPoolSize].mNetworkKey, mPanKeys[i].m8, NetworkKey::kSize);
         mPanIdPoolSize++;
     }
 
-    LogWarn("PanIdPool built: %u entries (router PAN 0x%04x + %u additional)",
-            mPanIdPoolSize, mPanIdPool[0].mPanId, mPanIdPoolSize - 1);
+    mPanIdPool[mPanIdPoolSize].mPanId = Get<Mac::Mac>().GetPanId();
+    memcpy(mPanIdPool[mPanIdPoolSize].mNetworkKey, mNetworkKey.m8, NetworkKey::kSize);
+    mPanIdPoolSize++;
+
+    LogWarn("PanIdPool built: %u entries (%u joiner PANs + router PAN 0x%04x last)",
+            mPanIdPoolSize, mPanIdPoolSize - 1, mPanIdPool[mPanIdPoolSize - 1].mPanId);
 }
 
 void KeyManager::UpdateKeyMaterial(void)
