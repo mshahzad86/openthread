@@ -37,6 +37,8 @@
 
 namespace ot {
 
+RegisterLogModule("MsgFramer");
+
 MessageFramer::MessageFramer(Instance &aInstance)
     : InstanceLocator(aInstance)
 {
@@ -119,6 +121,9 @@ void MessageFramer::PrepareMacHeaders(Mac::TxFrame &aTxFrame, Mac::TxFrame::Info
 void MessageFramer::PrepareEmptyFrame(Mac::TxFrame &aFrame, const Mac::Address &aMacDest, bool aAckRequest)
 {
     Mac::TxFrame::Info frameInfo;
+#if OPENTHREAD_FTD
+    Neighbor          *neighbor;
+#endif
 
     frameInfo.mAddrs.mSource.SetShort(Get<Mac::Mac>().GetShortAddress());
 
@@ -128,7 +133,21 @@ void MessageFramer::PrepareEmptyFrame(Mac::TxFrame &aFrame, const Mac::Address &
     }
 
     frameInfo.mAddrs.mDestination = aMacDest;
-    frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+
+#if OPENTHREAD_FTD
+    neighbor = Get<NeighborTable>().FindNeighbor(aMacDest);
+
+    if ((neighbor != nullptr) && neighbor->IsStateValid() && Get<ChildTable>().Contains(*neighbor))
+    {
+        const Child *child = static_cast<const Child *>(neighbor);
+
+        frameInfo.mPanIds.SetBothSourceDestination(child->GetPanId());
+    }
+    else
+#endif
+    {
+        frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+    }
 
     frameInfo.mType          = Mac::Frame::kTypeData;
     frameInfo.mSecurityLevel = Mac::Frame::kSecurityEncMic32;
@@ -189,17 +208,22 @@ start:
         }
         else
         {
-            // For non-child devices, use the router's PAN ID
             frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
         }
     }
     else
     {
-        // Default to router's PAN ID if neighbor not found
-        frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+        if (aMacAddrs.mDestination.IsExtended())
+        {
+            uint16_t panId = Get<MeshCoP::JoinerRouter>().GetOrAllocateNextPanId();
+            frameInfo.mPanIds.SetBothSourceDestination(panId);
+        }
+        else
+        {
+            frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+        }
     }
 #else
-    // For non-FTD builds, always use the router's PAN ID
     frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
 #endif
 
@@ -214,8 +238,16 @@ start:
             break;
 
         case Mle::kCommandDiscoveryRequest:
+            frameInfo.mPanIds.SetDestination(aMessage.GetPanId());
+            break;
+
         case Mle::kCommandDiscoveryResponse:
             frameInfo.mPanIds.SetDestination(aMessage.GetPanId());
+#if OPENTHREAD_FTD
+            frameInfo.mPanIds.SetSource(Get<MeshCoP::JoinerRouter>().GetOrAllocateNextPanId());
+#else
+            frameInfo.mPanIds.SetSource(Get<Mac::Mac>().GetPanId());
+#endif
             break;
 
         default:

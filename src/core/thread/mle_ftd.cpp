@@ -35,6 +35,7 @@
 #if OPENTHREAD_FTD
 
 #include "instance/instance.hpp"
+#include "thread/device_assignment.hpp"
 
 namespace ot {
 namespace Mle {
@@ -2863,44 +2864,6 @@ exit:
     return error;
 }
 
-// Multipan device assignment table: maps EUI-64 -> (PAN ID, Network Key)
-struct DeviceAssignment
-{
-    uint8_t  mEui64[OT_EXT_ADDRESS_SIZE];
-    uint16_t mPanId;
-    uint8_t  mNetworkKey[OT_NETWORK_KEY_SIZE];
-};
-
-static const DeviceAssignment sDeviceTable[] = {
-    // ESP1: eui64 1051dbfffe008a0c, PAN 0x1234
-    {
-        {0x10, 0x51, 0xdb, 0xff, 0xfe, 0x00, 0x8a, 0x0c},
-        0x1234,
-        {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
-         0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff},
-    },
-    // ESP2: eui64 f0f5bdfffe025f58, PAN 0x5678
-    {
-        {0xf0, 0xf5, 0xbd, 0xff, 0xfe, 0x02, 0x5f, 0x58},
-        0x5678,
-        {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
-         0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00},
-    },
-};
-
-static const DeviceAssignment *FindDeviceAssignment(const Mac::ExtAddress &aExtAddress)
-{
-    for (const auto &entry : sDeviceTable)
-    {
-        if (memcmp(aExtAddress.m8, entry.mEui64, OT_EXT_ADDRESS_SIZE) == 0)
-        {
-            return &entry;
-        }
-    }
-
-    return nullptr;
-}
-
 Error Mle::SendChildIdResponse(Child &aChild)
 {
     Error        error = kErrorNone;
@@ -2933,8 +2896,25 @@ Error Mle::SendChildIdResponse(Child &aChild)
 
         case Tlv::kActiveDataset:
         {
-            MeshCoP::Dataset        dataset;
-            const DeviceAssignment *assignment = FindDeviceAssignment(aChild.GetExtAddress());
+            MeshCoP::Dataset      dataset;
+            const PanIdAssignment *assignment = nullptr;
+            uint16_t               pendingPanId;
+            Ip6::InterfaceIdentifier dummyIid;
+            KeyManager            &keyMgr = Get<KeyManager>();
+
+            if (Get<MeshCoP::JoinerRouter>().LookupPendingPanId(dummyIid, pendingPanId))
+            {
+                assignment = FindPanIdAssignment(keyMgr.GetPanIdPool(),
+                                                 keyMgr.GetPanIdPoolSize(),
+                                                 pendingPanId);
+            }
+
+            if (assignment == nullptr)
+            {
+                assignment = AllocateNextPanId(keyMgr.GetPanIdPool(),
+                                               keyMgr.GetPanIdPoolSize(),
+                                               mChildTable);
+            }
 
             error = Get<MeshCoP::ActiveDatasetManager>().Read(dataset);
 
@@ -2947,9 +2927,8 @@ Error Mle::SendChildIdResponse(Child &aChild)
                     memcpy(networkKey.m8, assignment->mNetworkKey, OT_NETWORK_KEY_SIZE);
                     IgnoreError(dataset.Write<MeshCoP::PanIdTlv>(assignment->mPanId));
                     IgnoreError(dataset.Write<MeshCoP::NetworkKeyTlv>(networkKey));
-
-                    LogInfo("Multipan: Assigning PAN 0x%04x to child %s", assignment->mPanId,
-                            aChild.GetExtAddress().ToString().AsCString());
+                    aChild.SetPanId(assignment->mPanId);
+                    LogInfo("#### Assigned PAN 0x%04x for child", assignment->mPanId);
                 }
 
                 dataset.RemoveTimestamp(MeshCoP::Dataset::kActive);

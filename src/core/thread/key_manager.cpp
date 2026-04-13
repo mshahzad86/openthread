@@ -376,6 +376,27 @@ void KeyManager::ComputeTrelKey(uint32_t aKeySequence, Mac::Key &aKey) const
 }
 #endif
 
+void KeyManager::BuildPanIdPool(void)
+{
+    mPanIdPoolSize = 0;
+
+    uint8_t count = OT_MIN(mPanIdCount, mPanKeyCount);
+
+    for (uint8_t i = 0; i < count && mPanIdPoolSize < kMaxPanKeys; i++)
+    {
+        mPanIdPool[mPanIdPoolSize].mPanId = mPanIds[i];
+        memcpy(mPanIdPool[mPanIdPoolSize].mNetworkKey, mPanKeys[i].m8, NetworkKey::kSize);
+        mPanIdPoolSize++;
+    }
+
+    mPanIdPool[mPanIdPoolSize].mPanId = Get<Mac::Mac>().GetPanId();
+    memcpy(mPanIdPool[mPanIdPoolSize].mNetworkKey, mNetworkKey.m8, NetworkKey::kSize);
+    mPanIdPoolSize++;
+
+    LogWarn("PanIdPool built: %u entries (%u joiner PANs + router PAN 0x%04x last)",
+            mPanIdPoolSize, mPanIdPoolSize - 1, mPanIdPool[mPanIdPoolSize - 1].mPanId);
+}
+
 void KeyManager::UpdateKeyMaterial(void)
 {
     PanIdHashKeyMap hashKeyMap;
