@@ -54,6 +54,8 @@
 #include "common/log.hpp"
 #include "common/message.hpp"
 #include "common/non_copyable.hpp"
+#include "common/num_utils.hpp"
+#include "common/numeric_limits.hpp"
 #include "common/random.hpp"
 #include "common/serial_number.hpp"
 #include "common/string.hpp"
@@ -315,14 +317,30 @@ public:
      *
      * @returns The log level.
      */
-    static LogLevel GetLogLevel(void)
-#if OPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE
+    LogLevel GetLogLevel(void) const
     {
-        return sLogLevel;
-    }
-#else
-    {
+#if !OPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE
         return static_cast<LogLevel>(OPENTHREAD_CONFIG_LOG_LEVEL);
+#elif !OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
+        return mLogLevel;
+#else
+        return (mIsLogLevelSet) ? mLogLevel : sGlobalLogLevel;
+#endif
+    }
+
+#if OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
+    /**
+     * Returns the global log level.
+     *
+     * @returns The global log level.
+     */
+    static LogLevel GetGlobalLogLevel(void)
+    {
+#if !OPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE
+        return static_cast<LogLevel>(OPENTHREAD_CONFIG_LOG_LEVEL);
+#else
+        return sGlobalLogLevel;
+#endif
     }
 #endif
 
@@ -331,9 +349,25 @@ public:
      * Sets the log level.
      *
      * @param[in] aLogLevel  A log level.
+     *
+     * @retval kErrorNone         Successfully updated the log level.
+     * @retval kErrorInvalidArgs  The given log level is invalid.
+     * @retval kErrorNotCapable   Instance-aware logging is not enabled in a multi-instance configuration.
      */
-    static void SetLogLevel(LogLevel aLogLevel);
+    Error SetLogLevel(LogLevel aLogLevel);
+
+#if OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
+    /**
+     * Sets the global log level.
+     *
+     * @param[in] aLogLevel  A log level.
+     *
+     * @retval kErrorNone         Successfully updated the log level.
+     * @retval kErrorInvalidArgs  The given log level is invalid.
+     */
+    static Error SetGlobalLogLevel(LogLevel aLogLevel);
 #endif
+#endif // OPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE
 
     /**
      * Finalizes the OpenThread instance.
@@ -369,23 +403,31 @@ public:
 
 #if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
     /**
-     * Enables/disables the "DNS name compressions" mode.
+     * Enables/disables the "DNS name compression" mode.
      *
-     * By default DNS name compression is enabled. When disabled, DNS names are appended as full and never compressed.
-     * This is applicable to OpenThread's DNS and SRP client/server modules.
+     * By default, DNS name compression is enabled. When disabled, DNS names are appended in full and are never
+     * compressed. This applies to OpenThread's DNS and SRP client/server modules.
+     *
+     * DNS name compression cannot be disabled if the OpenThread mDNS module is enabled. Enabling the mDNS module will
+     * automatically enable name compression if it was previously disabled. Attempting to disable compression while the
+     * mDNS module is active will return `kErrorNotCapable`.
      *
      * This is intended for testing only and available under a `REFERENCE_DEVICE` config.
      *
      * @param[in] aEnabled   TRUE to enable the "DNS name compression" mode, FALSE to disable.
+     *
+     * @retval kErrorNone         The "DNS name compression" mode is updated.
+     * @retval kErrorNotCapable   The "DNS name compression" mode cannot be disabled since OpenThread mDNS module is
+     *                            enabled.
      */
-    static void SetDnsNameCompressionEnabled(bool aEnabled) { sDnsNameCompressionEnabled = aEnabled; }
+    Error SetDnsNameCompressionEnabled(bool aEnabled);
 
     /**
      * Indicates whether the "DNS name compression" mode is enabled or not.
      *
-     * @returns TRUE if the "DNS name compressions" mode is enabled, FALSE otherwise.
+     * @returns TRUE if the "DNS name compression" mode is enabled, FALSE otherwise.
      */
-    static bool IsDnsNameCompressionEnabled(void) { return sDnsNameCompressionEnabled; }
+    bool IsDnsNameCompressionEnabled(void) { return mDnsNameCompressionEnabled; }
 #endif
 
     /**
@@ -419,6 +461,17 @@ public:
      */
     template <typename Type> inline Type &Get(void);
 
+#if OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE && OPENTHREAD_CONFIG_LOG_INSTANCE_AWARE_API_ENABLE
+    /**
+     * Gets the currently active OpenThread instance.
+     *
+     * It is used to determine the active instance primarily for logging purposes.
+     *
+     * @returns A pointer to the active OpenThread instance, or `nullptr` if not known.
+     */
+    static Instance *GetActiveInstance(void);
+#endif
+
 #if OPENTHREAD_PLATFORM_NEXUS
     /**
      * Constructor to initialize an `Instance`
@@ -431,7 +484,41 @@ public:
     void AfterInit(void);
 #endif
 
+#if OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE && OPENTHREAD_CONFIG_LOG_INSTANCE_AWARE_API_ENABLE
+    /**
+     * Destructor
+     */
+    ~Instance(void);
+#endif
+
 private:
+    class ActiveInstanceTracker
+    {
+    public:
+        // This class is used to track and update the `gActiveInstance` pointer during the
+        // construction and destruction of an `Instance`.
+        //
+        // `mActiveInstanceTracker` is defined as the very first member variable in `Instance`.
+        // This ensures its constructor is called before any other member components are
+        // initialized, and its destructor is called after all other components are destroyed.
+        // This ensures `gActiveInstance` is correctly set during the entire lifecycle of
+        // the `Instance`, allowing member components to safely emit logs.
+        //
+        // The `Instance` destructor also explicitly sets `gActiveInstance` to the instance
+        // being destroyed at the beginning of its body. This ensures that during the
+        // entire destruction process, log messages are correctly associated with the
+        // instance being destroyed. Finally, when `mActiveInstanceTracker` itself is
+        // destroyed (at the end of the `Instance` destruction), `gActiveInstance` is
+        // set to `nullptr` to avoid any potential use of a dangling pointer.
+
+#if OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE && OPENTHREAD_CONFIG_LOG_INSTANCE_AWARE_API_ENABLE
+        ActiveInstanceTracker(Instance &aInstance) { gActiveInstance = &aInstance; }
+        ~ActiveInstanceTracker(void) { gActiveInstance = nullptr; }
+#else
+        ActiveInstanceTracker(Instance &) {}
+#endif
+    };
+
 #if !OPENTHREAD_PLATFORM_NEXUS
     Instance(void);
     void AfterInit(void);
@@ -440,16 +527,12 @@ private:
     //-----------------------------------------------------------------------------------------------------------------
     // `static` variables
 
-#if OPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE
-    static LogLevel sLogLevel;
+#if OPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE && OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
+    static LogLevel sGlobalLogLevel;
 #endif
 
 #if (OPENTHREAD_MTD || OPENTHREAD_FTD) && !OPENTHREAD_CONFIG_HEAP_EXTERNAL_ENABLE
     static Utils::Heap *sHeap;
-#endif
-
-#if (OPENTHREAD_MTD || OPENTHREAD_FTD) && OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
-    static bool sDnsNameCompressionEnabled;
 #endif
 
     //-----------------------------------------------------------------------------------------------------------------
@@ -459,6 +542,8 @@ private:
     //
     // Tasklet and Timer Schedulers are first to ensure other
     // objects/classes can use them from their constructors.
+
+    ActiveInstanceTracker mActiveInstanceTracker;
 
     Tasklet::Scheduler    mTaskletScheduler;
     TimerMilli::Scheduler mTimerMilliScheduler;
@@ -758,6 +843,10 @@ private:
     Nat64::Translator mNat64Translator;
 #endif
 
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+    bool mDnsNameCompressionEnabled;
+#endif
+
 #endif // OPENTHREAD_MTD || OPENTHREAD_FTD
 
 #if OPENTHREAD_RADIO || OPENTHREAD_CONFIG_LINK_RAW_ENABLE
@@ -773,6 +862,13 @@ private:
 #endif
 #if OPENTHREAD_CONFIG_POWER_CALIBRATION_ENABLE && OPENTHREAD_CONFIG_PLATFORM_POWER_CALIBRATION_ENABLE
     Utils::PowerCalibration mPowerCalibration;
+#endif
+
+#if OPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE
+    LogLevel mLogLevel;
+#if OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
+    bool mIsLogLevelSet;
+#endif
 #endif
 
     bool mIsInitialized;
@@ -954,12 +1050,6 @@ template <> inline TimeSync &Instance::Get(void) { return mTimeSync; }
 
 #if OPENTHREAD_CONFIG_COMMISSIONER_ENABLE && OPENTHREAD_FTD
 template <> inline MeshCoP::Commissioner &Instance::Get(void) { return mCommissioner; }
-
-template <> inline AnnounceBeginClient &Instance::Get(void) { return mCommissioner.GetAnnounceBeginClient(); }
-
-template <> inline EnergyScanClient &Instance::Get(void) { return mCommissioner.GetEnergyScanClient(); }
-
-template <> inline PanIdQueryClient &Instance::Get(void) { return mCommissioner.GetPanIdQueryClient(); }
 #endif
 
 #if OPENTHREAD_CONFIG_PLATFORM_DNSSD_ENABLE || OPENTHREAD_CONFIG_MULTICAST_DNS_ENABLE

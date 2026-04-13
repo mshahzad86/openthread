@@ -228,6 +228,11 @@ private:
 #if OPENTHREAD_FTD
     void OutputEidCacheEntry(const otCacheEntryInfo &aEntry);
 #endif
+
+#if OPENTHREAD_CONFIG_IP6_INIT_EXT_ADDR_POOL_ENABLE && OPENTHREAD_CONFIG_CLI_IFCONFIG_INIT_ENABLE
+    otError ProcessIfconfigInit(Arg aArgs[]);
+#endif
+
 #if OPENTHREAD_CONFIG_TMF_ANYCAST_LOCATOR_ENABLE
     static void HandleLocateResult(void               *aContext,
                                    otError             aError,
@@ -255,7 +260,7 @@ private:
     static void HandleLinkPcapReceive(const otRadioFrame *aFrame, bool aIsTx, void *aContext);
 
 #if OPENTHREAD_CONFIG_TMF_NETDIAG_CLIENT_ENABLE
-    void HandleDiagnosticGetResponse(otError aError, const otMessage *aMessage, const Ip6::MessageInfo *aMessageInfo);
+    void HandleDiagnosticGetResponse(otError aError, const otMessage *aMessage, const otMessageInfo *aMessageInfo);
     static void HandleDiagnosticGetResponse(otError              aError,
                                             otMessage           *aMessage,
                                             const otMessageInfo *aMessageInfo,
@@ -271,6 +276,10 @@ private:
     void OutputNetworkDiagMacCounters(uint8_t aIndentSize, const otNetworkDiagMacCounters &aMacCounters);
     void OutputNetworkDiagMleCounters(uint8_t aIndentSize, const otNetworkDiagMleCounters &aMleCounters);
     void OutputChildTableEntry(uint8_t aIndentSize, const otNetworkDiagChildEntry &aChildEntry);
+#endif
+
+#if OPENTHREAD_CONFIG_BORDER_AGENT_TXT_DATA_PARSER_ENABLE
+    void OutputBorderAgentTxtDataInfo(uint8_t aIndentSize, const otBorderAgentTxtDataInfo &aInfo);
 #endif
 
 #if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE

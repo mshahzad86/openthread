@@ -79,12 +79,11 @@ Error Client::SendQuery(Tlv::Type aTlvType, uint16_t aMaxEntries, uint32_t aMaxE
 {
     Error                   error = kErrorNone;
     OwnedPtr<Coap::Message> message;
-    Tmf::MessageInfo        messageInfo(GetInstance());
     RequestTlv              requestTlv;
 
     VerifyOrExit(Get<Mle::Mle>().IsAttached(), error = kErrorInvalidState);
 
-    message.Reset(Get<Tmf::Agent>().NewNonConfirmablePostMessage(kUriHistoryQuery));
+    message.Reset(Get<Tmf::Agent>().AllocateAndInitNonConfirmablePostMessage(kUriHistoryQuery));
     VerifyOrExit(message != nullptr, error = kErrorNoBufs);
     IgnoreError(message->SetPriority(Message::kPriorityLow));
 
@@ -94,10 +93,7 @@ Error Client::SendQuery(Tlv::Type aTlvType, uint16_t aMaxEntries, uint32_t aMaxE
     requestTlv.Init(aTlvType, aMaxEntries, aMaxEntryAge);
     SuccessOrExit(error = message->Append(requestTlv));
 
-    messageInfo.SetSockAddrToRloc();
-    messageInfo.GetPeerAddr().SetToRoutingLocator(Get<Mle::Mle>().GetMeshLocalPrefix(), aRloc16);
-
-    SuccessOrExit(error = Get<Tmf::Agent>().SendMessage(*message, messageInfo));
+    SuccessOrExit(error = Get<Tmf::Agent>().SendMessageToRloc(*message, aRloc16));
     message.Release();
 
     LogInfo("Sent %s for TLV %u to 0x%04x", UriToString<kUriHistoryQuery>(), aTlvType, aRloc16);
@@ -114,8 +110,8 @@ exit:
 
 template <> void Client::HandleTmf<kUriHistoryAnswer>(Coap::Msg &aMsg)
 {
-    VerifyOrExit(aMsg.IsConfirmablePostRequest());
-    IgnoreError(Get<Tmf::Agent>().SendEmptyAck(aMsg));
+    VerifyOrExit(aMsg.IsConfirmable());
+    IgnoreError(Get<Tmf::Agent>().SendAckResponse(aMsg));
 
     LogInfo("Received %s from %s", ot::UriToString<kUriHistoryAnswer>(),
             aMsg.mMessageInfo.GetPeerAddr().ToString().AsCString());
@@ -137,9 +133,9 @@ exit:
 
 Error Client::ProcessAnswer(const Coap::Msg &aMsg)
 {
-    Error     error = kErrorFailed;
-    AnswerTlv answerTlv;
-    uint16_t  queryId;
+    Error          error = kErrorFailed;
+    AnswerTlvValue answerTlvValue;
+    uint16_t       queryId;
 
     VerifyOrExit(mActive);
     VerifyOrExit(Get<Mle::Mle>().IsRoutingLocator(aMsg.mMessageInfo.GetPeerAddr()));
@@ -148,9 +144,9 @@ Error Client::ProcessAnswer(const Coap::Msg &aMsg)
     SuccessOrExit(Tlv::Find<QueryIdTlv>(aMsg.mMessage, queryId));
     VerifyOrExit(queryId == mQueryId);
 
-    SuccessOrExit(Tlv::FindTlv(aMsg.mMessage, answerTlv));
+    SuccessOrExit(Tlv::Find<AnswerTlv>(aMsg.mMessage, answerTlvValue));
 
-    if (answerTlv.GetIndex() != mAnswerIndex)
+    if (answerTlvValue.GetIndex() != mAnswerIndex)
     {
         Finalize(kErrorResponseTimeout);
         ExitNow();

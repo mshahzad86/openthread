@@ -61,6 +61,7 @@ extern "C" {
 #define OT_BORDER_AGENT_THREAD_VERSION_SIZE (16) ///< Max size of Thread Version string in `otBorderAgentTxtDataInfo`.
 #define OT_BORDER_AGENT_VENDOR_NAME_SIZE (32)    ///< Max size of Vendor Name string in `otBorderAgentTxtDataInfo`.
 #define OT_BORDER_AGENT_MODEL_NAME_SIZE (32)     ///< Max size of Model Name string in `otBorderAgentTxtDataInfo`.
+#define OT_BORDER_AGENT_VENDOR_OUI_SIZE (3)      ///< Size of Vendor OUI (in bytes) in `otBorderAgentTxtDataInfo`.
 
 /**
  * Represents the Connection Mode in a Border Agent State Bitmap.
@@ -152,6 +153,7 @@ typedef struct otBorderAgentTxtDataInfo
     bool                     mHasExtAddress : 1;      ///< Indicates whether Extended Address is present.
     bool                     mHasVendorName : 1;      ///< Indicates whether Vendor Name is present.
     bool                     mHasModelName : 1;       ///< Indicates whether Model Name is present.
+    bool                     mHasVendorOui : 1;       ///< Indicates whether Vendor OUI is present.
     char                     mRecordVersion[OT_BORDER_AGENT_RECORD_VERSION_SIZE]; ///< Record Version string.
     otBorderAgentId          mAgentId;                                            ///< Agent ID.
     char                     mThreadVersion[OT_BORDER_AGENT_THREAD_VERSION_SIZE]; ///< Thread Version string.
@@ -167,6 +169,7 @@ typedef struct otBorderAgentTxtDataInfo
     otExtAddress             mExtAddress;                                         ///< Extended Address.
     char                     mVendorName[OT_BORDER_AGENT_VENDOR_NAME_SIZE];       ///< Vendor Name string.
     char                     mModelName[OT_BORDER_AGENT_MODEL_NAME_SIZE];         ///< Model Name string.
+    uint8_t                  mVendorOui[OT_BORDER_AGENT_VENDOR_OUI_SIZE];         ///< Vendor OUI (24-bit).
 } otBorderAgentTxtDataInfo;
 
 /**
@@ -182,6 +185,61 @@ typedef struct otBorderAgentTxtDataInfo
  * @retval OT_ERROR_PARSE    Failed to parse the TXT data.
  */
 otError otBorderAgentTxtDataParse(const uint8_t *aTxtData, uint16_t aTxtDataLength, otBorderAgentTxtDataInfo *aInfo);
+
+/**
+ * Converts a given Connection Mode in a Border Agent State Bitmap to a human-readable string.
+ *
+ * Requires `OPENTHREAD_CONFIG_BORDER_AGENT_TXT_DATA_PARSER_ENABLE`.
+ *
+ * @param[in] aConnMode   The Connection Mode to convert.
+ *
+ * @return The string representation of @p aConnMode.
+ */
+const char *otBorderAgentConnModeToString(otBorderAgentConnMode aConnMode);
+
+/**
+ * Converts a given Thread Interface State in a Border Agent State Bitmap to a human-readable string.
+ *
+ * Requires `OPENTHREAD_CONFIG_BORDER_AGENT_TXT_DATA_PARSER_ENABLE`.
+ *
+ * @param[in] aIfState   The Thread Interface State to convert.
+ *
+ * @return The string representation of @p aIfState.
+ */
+const char *otBorderAgentIfStateToString(otBorderAgentThreadIfState aIfState);
+
+/**
+ * Converts a given Availability Status in a Border Agent State Bitmap to a human-readable string.
+ *
+ * Requires `OPENTHREAD_CONFIG_BORDER_AGENT_TXT_DATA_PARSER_ENABLE`.
+ *
+ * @param[in] aAvailability   The Availability Status to convert.
+ *
+ * @return The string representation of @p aAvailability.
+ */
+const char *otBorderAgentAvailabilityToString(otBorderAgentAvailability aAvailability);
+
+/**
+ * Converts a given Thread Role in a Border Agent State Bitmap to a human-readable string.
+ *
+ * Requires `OPENTHREAD_CONFIG_BORDER_AGENT_TXT_DATA_PARSER_ENABLE`.
+ *
+ * @param[in] aRole   The Thread Role to convert.
+ *
+ * @return The string representation of @p aRole.
+ */
+const char *otBorderAgentThreadRoleToString(otBorderAgentThreadRole aRole);
+
+/**
+ * Converts a given Multi-AIL State in a Border Agent State Bitmap to a human-readable string.
+ *
+ * Requires `OPENTHREAD_CONFIG_BORDER_AGENT_TXT_DATA_PARSER_ENABLE`.
+ *
+ * @param[in] aState   The Multi-AIL State to convert.
+ *
+ * @return The string representation of @p aState.
+ */
+const char *otBorderAgentMultiAilStateToString(otBorderAgentMultiAilState aState);
 
 /**
  * @}

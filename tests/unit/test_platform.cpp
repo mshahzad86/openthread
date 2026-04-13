@@ -75,6 +75,23 @@ ot::Instance *testInitInstance(void)
     return static_cast<ot::Instance *>(instance);
 }
 
+ot::Instance *testResetInstance(ot::Instance *aInstance)
+{
+    otInstanceFinalize(aInstance);
+
+#if OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
+    {
+        size_t instanceBufferLength = sizeof(ot::Instance);
+
+        aInstance = static_cast<ot::Instance *>(otInstanceInit(aInstance, &instanceBufferLength));
+    }
+#else
+    aInstance = static_cast<ot::Instance *>(otInstanceInitSingle());
+#endif
+
+    return aInstance;
+}
+
 #if OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE && OPENTHREAD_CONFIG_MULTIPLE_STATIC_INSTANCE_ENABLE
 ot::Instance *testInitAdditionalInstance(uint8_t id)
 {
@@ -310,6 +327,8 @@ OT_TOOL_WEAK otPlatResetReason otPlatGetResetReason(otInstance *) { return OT_PL
 
 OT_TOOL_WEAK void otPlatWakeHost(void) {}
 
+OT_TOOL_WEAK void otPlatLogOutput(otInstance *, otLogLevel, const char *) {}
+
 OT_TOOL_WEAK void otPlatLog(otLogLevel, otLogRegion, const char *, ...) {}
 
 OT_TOOL_WEAK void otPlatSettingsInit(otInstance *, const uint16_t *, uint16_t) {}
@@ -508,14 +527,14 @@ OT_TOOL_WEAK otLinkMetrics otPlatRadioGetEnhAckProbingMetrics(otInstance *, cons
 
 #if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
 
-OT_TOOL_WEAK bool otPlatInfraIfHasAddress(uint32_t, const otIp6Address *) { return false; }
+OT_TOOL_WEAK bool otPlatInfraIfHasAddress(otInstance *, uint32_t, const otIp6Address *) { return false; }
 
-OT_TOOL_WEAK otError otPlatInfraIfSendIcmp6Nd(uint32_t, const otIp6Address *, const uint8_t *, uint16_t)
+OT_TOOL_WEAK otError otPlatInfraIfSendIcmp6Nd(otInstance *, uint32_t, const otIp6Address *, const uint8_t *, uint16_t)
 {
     return OT_ERROR_FAILED;
 }
 
-OT_TOOL_WEAK otError otPlatInfraIfDiscoverNat64Prefix(uint32_t) { return OT_ERROR_FAILED; }
+OT_TOOL_WEAK otError otPlatInfraIfDiscoverNat64Prefix(otInstance *, uint32_t) { return OT_ERROR_FAILED; }
 
 #if OPENTHREAD_CONFIG_BORDER_ROUTING_DHCP6_PD_ENABLE && OPENTHREAD_CONFIG_BORDER_ROUTING_DHCP6_PD_CLIENT_ENABLE
 

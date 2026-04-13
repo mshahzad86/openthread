@@ -332,6 +332,7 @@ Client::Client(Instance &aInstance)
     , mShouldRemoveKeyLease(false)
 #if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
     , mServiceKeyRecordEnabled(false)
+    , mHostKeyRecordEnabled(true)
     , mUseShortLeaseOption(false)
 #endif
     , mCurMessageId(0)
@@ -384,8 +385,7 @@ Error Client::Start(const Ip6::SockAddr &aServerSockAddr, Requester aRequester)
 
     if (error != kErrorNone)
     {
-        LogInfo("Failed to connect to server %s: %s", aServerSockAddr.GetAddress().ToString().AsCString(),
-                ErrorToString(error));
+        LogInfoOnError(error, "connect to server %s", aServerSockAddr.GetAddress().ToString().AsCString());
         IgnoreError(mSocket.Close());
         ExitNow();
     }
@@ -1049,7 +1049,7 @@ exit:
         // continue to retry using the `mRetryWaitInterval` (which keeps
         // growing on each failure).
 
-        LogInfo("Failed to send update: %s", ErrorToString(error));
+        LogInfoOnError(error, "send update");
 
         SetState(kStateToRetry);
 
@@ -1546,7 +1546,12 @@ Error Client::AppendHostDescriptionInstruction(MsgInfo &aInfo)
     // KEY RR
 
     SuccessOrExit(error = AppendHostName(aInfo));
-    SuccessOrExit(error = AppendKeyRecord(aInfo));
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+    if (mHostKeyRecordEnabled)
+#endif
+    {
+        SuccessOrExit(error = AppendKeyRecord(aInfo));
+    }
 
 exit:
     return error;
@@ -1928,10 +1933,7 @@ void Client::ProcessResponse(Message &aMessage)
     UpdateState();
 
 exit:
-    if (error != kErrorNone)
-    {
-        LogInfo("Failed to process response %s", ErrorToString(error));
-    }
+    LogInfoOnError(error, "process response");
 }
 
 void Client::SelectNewMessageId(void)

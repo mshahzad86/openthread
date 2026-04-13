@@ -29,8 +29,10 @@
 #ifndef OT_NEXUS_PLATFORM_NEXUS_CORE_HPP_
 #define OT_NEXUS_PLATFORM_NEXUS_CORE_HPP_
 
+#include "common/array.hpp"
 #include "common/owning_list.hpp"
 #include "instance/instance.hpp"
+#include "thread/key_manager.hpp"
 
 #include "nexus_alarm.hpp"
 #include "nexus_pcap.hpp"
@@ -53,30 +55,40 @@ public:
     Node             &CreateNode(void);
     LinkedList<Node> &GetNodes(void) { return mNodes; }
 
-    TimeMilli GetNow(void) { return mNow; }
+    TimeMilli GetNow(void) { return TimeMilli(static_cast<uint32_t>(mNow / 1000u)); }
+    TimeMicro GetNowMicro(void) { return TimeMicro(static_cast<uint32_t>(mNow)); }
+    uint64_t  GetNowMicro64(void) const { return mNow; }
     void      AdvanceTime(uint32_t aDuration);
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Test specific helper methods
 
-    void SaveTestInfo(const char *aFilename);
+    void SaveTestInfo(const char *aFilename, Node *aLeaderNode = nullptr);
+    void AddNetworkKey(const NetworkKey &aKey);
+    void AddTestVar(const char *aName, const char *aValue);
+    void AddTestVar(const char *aName, uint32_t aValue);
+    void AddOmrPrefixTestVar(const char *aName, Node &aNode);
     void SendAndVerifyEchoRequest(Node               &aSender,
                                   const Ip6::Address &aDestination,
                                   uint16_t            aPayloadSize     = 0,
-                                  uint8_t             aHopLimit        = 64,
+                                  uint8_t             aHopLimit        = Ip6::kDefaultHopLimit,
                                   uint32_t            aResponseTimeout = 1000);
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Used by platform implementation
 
-    void  SetActiveNode(Node *aNode) { mActiveNode = aNode; }
-    Node *GetActiveNode(void) { return mActiveNode; }
-
-    void UpdateNextAlarmTime(const Alarm &aAlarm);
+    void UpdateNextAlarmMilli(const Alarm &aAlarm);
+    void UpdateNextAlarmMicro(const Alarm &aAlarm);
     void MarkPendingAction(void) { mPendingAction = true; }
 
+    Node *FindNodeByAddress(const Ip6::Address &aAddress);
+    bool  IsThreadAddress(const Ip6::Address &aAddress);
+    Node *FindNodeByThreadAddress(const Ip6::Address &aAddress);
+    Node *FindNodeByInfraIfAddress(const Ip6::Address &aAddress);
+
 private:
-    static constexpr int8_t kDefaultRxRssi = -20;
+    static constexpr int8_t  kDefaultRxRssi = -20;
+    static constexpr uint8_t kDefaultRxLqi  = 255;
 
     enum AckMode : uint8_t
     {
@@ -94,12 +106,17 @@ private:
         bool     mResponseReceived;
     };
 
+    struct TestVar
+    {
+        String<32> mName;
+        String<64> mValue;
+    };
+
+    TestVar &NewTestVar(const char *aName);
+
     void Process(Node &aNode);
     void ProcessRadio(Node &aNode);
-    void ProcessMdns(Node &aNode);
-#if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
-    void ProcessTrel(Node &aNode);
-#endif
+    void ProcessInfraIf(Node &aNode);
 
     static void HandleIcmpResponse(void                *aContext,
                                    otMessage           *aMessage,
@@ -109,16 +126,16 @@ private:
     static Core *sCore;
     static bool  sInUse;
 
-    OwningList<Node> mNodes;
-    Pcap             mPcap;
-    uint16_t         mCurNodeId;
-    bool             mPendingAction;
-    TimeMilli        mNow;
-    TimeMilli        mNextAlarmTime;
-    Node            *mActiveNode;
+    OwningList<Node>      mNodes;
+    Pcap                  mPcap;
+    Array<NetworkKey, 16> mNetworkKeys;
+    Array<TestVar, 128>   mTestVars;
+    uint16_t              mCurNodeId;
+    bool                  mPendingAction;
+    bool                  mSaveNodeLogs;
+    uint64_t              mNow;
+    uint64_t              mNextAlarmTime;
 };
-
-void Log(const char *aFormat, ...);
 
 } // namespace Nexus
 } // namespace ot

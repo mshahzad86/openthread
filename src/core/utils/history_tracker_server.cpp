@@ -49,20 +49,15 @@ Server::Server(Instance &aInstance)
 
 template <> void Server::HandleTmf<kUriHistoryQuery>(Coap::Msg &aMsg)
 {
-    VerifyOrExit(aMsg.IsPostRequest());
-
     LogInfo("Received %s from %s", UriToString<kUriHistoryQuery>(),
             aMsg.mMessageInfo.GetPeerAddr().ToString().AsCString());
 
     if (aMsg.IsConfirmable())
     {
-        IgnoreError(Get<Tmf::Agent>().SendEmptyAck(aMsg));
+        IgnoreError(Get<Tmf::Agent>().SendAckResponse(aMsg));
     }
 
     PrepareAndSendAnswers(aMsg.mMessageInfo.GetPeerAddr(), aMsg.mMessage);
-
-exit:
-    return;
 }
 
 Error Server::AllocateAnswer(Coap::Message *&aAnswer, AnswerInfo &aInfo)
@@ -73,7 +68,7 @@ Error Server::AllocateAnswer(Coap::Message *&aAnswer, AnswerInfo &aInfo)
 
     Error error = kErrorNone;
 
-    aAnswer = Get<Tmf::Agent>().NewConfirmablePostMessage(kUriHistoryAnswer);
+    aAnswer = Get<Tmf::Agent>().AllocateAndInitConfirmablePostMessage(kUriHistoryAnswer);
     VerifyOrExit(aAnswer != nullptr, error = kErrorNoBufs);
     IgnoreError(aAnswer->SetPriority(aInfo.mPriority));
 
@@ -98,13 +93,13 @@ bool Server::IsLastAnswer(const Coap::Message &aAnswer) const
     // Indicates whether `aAnswer` is the last one associated with
     // the same query.
 
-    bool      isLast = true;
-    AnswerTlv answerTlv;
+    bool           isLast = true;
+    AnswerTlvValue answerTlvValue;
 
     // If there is no Answer TLV, we assume it is the last answer.
 
-    SuccessOrExit(Tlv::FindTlv(aAnswer, answerTlv));
-    isLast = answerTlv.IsLast();
+    SuccessOrExit(Tlv::Find<AnswerTlv>(aAnswer, answerTlvValue));
+    isLast = answerTlvValue.IsLast();
 
 exit:
     return isLast;
@@ -135,7 +130,7 @@ void Server::PrepareAndSendAnswers(const Ip6::Address &aDestination, const Messa
     OffsetRange    offsetRange;
     Tlv::Info      tlvInfo;
     RequestTlv     requestTlv;
-    AnswerTlv      answerTlv;
+    AnswerTlvValue answerTlvValue;
 
     if (Tlv::Find<QueryIdTlv>(aRequest, info.mQueryId) == kErrorNone)
     {
@@ -176,8 +171,8 @@ void Server::PrepareAndSendAnswers(const Ip6::Address &aDestination, const Messa
         }
     }
 
-    answerTlv.Init(info.mAnswerIndex, /* aIsLast */ true);
-    SuccessOrExit(error = answer->Append(answerTlv));
+    answerTlvValue.Init(info.mAnswerIndex, AnswerTlvValue::kIsLast);
+    SuccessOrExit(error = Tlv::Append<AnswerTlv>(*answer, answerTlvValue));
 
     SendNextAnswer(*info.mFirstAnswer, aDestination);
 
@@ -195,13 +190,13 @@ Error Server::CheckAnswerLength(Coap::Message *&aAnswer, AnswerInfo &aInfo)
     // appending an Answer TLV with the current index to the message.
     // In this case, it will also allocate a new answer message.
 
-    Error     error = kErrorNone;
-    AnswerTlv answerTlv;
+    Error          error = kErrorNone;
+    AnswerTlvValue answerTlvValue;
 
     VerifyOrExit(aAnswer->GetLength() >= kAnswerMessageLengthThreshold);
 
-    answerTlv.Init(aInfo.mAnswerIndex++, /* aIsLast */ false);
-    SuccessOrExit(error = aAnswer->Append(answerTlv));
+    answerTlvValue.Init(aInfo.mAnswerIndex++, AnswerTlvValue::kMoreToFollow);
+    SuccessOrExit(error = Tlv::Append<AnswerTlv>(*aAnswer, answerTlvValue));
 
     error = AllocateAnswer(aAnswer, aInfo);
 
@@ -211,18 +206,15 @@ exit:
 
 void Server::SendNextAnswer(Coap::Message &aAnswer, const Ip6::Address &aDestination)
 {
-    Error            error      = kErrorNone;
-    Coap::Message   *nextAnswer = IsLastAnswer(aAnswer) ? nullptr : aAnswer.GetNextCoapMessage();
-    Tmf::MessageInfo messageInfo(GetInstance());
+    Error          error      = kErrorNone;
+    Coap::Message *nextAnswer = IsLastAnswer(aAnswer) ? nullptr : aAnswer.GetNextCoapMessage();
 
     mAnswerQueue.Dequeue(aAnswer);
-
-    PrepareMessageInfoForDest(aDestination, messageInfo);
 
     // When sending the message, we pass `nextAnswer` as `aContext`
     // to be used when invoking callback `HandleAnswerResponse()`.
 
-    error = Get<Tmf::Agent>().SendMessage(aAnswer, messageInfo, HandleAnswerResponse, nextAnswer);
+    error = Get<Tmf::Agent>().SendMessageAllowMulticastLoop(aAnswer, aDestination, HandleAnswerResponse, nextAnswer);
 
     if (error != kErrorNone)
     {
@@ -236,25 +228,6 @@ void Server::SendNextAnswer(Coap::Message &aAnswer, const Ip6::Address &aDestina
             FreeAllRelatedAnswers(*nextAnswer);
         }
     }
-}
-
-void Server::PrepareMessageInfoForDest(const Ip6::Address &aDestination, Tmf::MessageInfo &aMessageInfo) const
-{
-    if (aDestination.IsMulticast())
-    {
-        aMessageInfo.SetMulticastLoop(true);
-    }
-
-    if (aDestination.IsLinkLocalUnicastOrMulticast())
-    {
-        aMessageInfo.SetSockAddr(Get<Mle::Mle>().GetLinkLocalAddress());
-    }
-    else
-    {
-        aMessageInfo.SetSockAddrToRloc();
-    }
-
-    aMessageInfo.SetPeerAddr(aDestination);
 }
 
 void Server::HandleAnswerResponse(void *aContext, Coap::Msg *aMsg, Error aResult)

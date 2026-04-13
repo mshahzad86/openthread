@@ -60,10 +60,6 @@
 #define OPENTHREAD_CONFIG_LOG_PREPEND_UPTIME 0
 #endif
 
-#if OPENTHREAD_CONFIG_LOG_PREPEND_UPTIME && OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
-#error "OPENTHREAD_CONFIG_LOG_PREPEND_UPTIME is not supported under OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE"
-#endif
-
 namespace ot {
 
 #if OT_SHOULD_LOG
@@ -85,6 +81,28 @@ template void Logger::LogAtLevel<kLogLevelNote>(const char *aModuleName, const c
 template void Logger::LogAtLevel<kLogLevelInfo>(const char *aModuleName, const char *aFormat, ...);
 template void Logger::LogAtLevel<kLogLevelDebg>(const char *aModuleName, const char *aFormat, ...);
 
+template <LogLevel kLogLevel> void Logger::LogOnError(const char *aModuleName, Error aError, const char *aFormat, ...)
+{
+    va_list args;
+
+    VerifyOrExit(aError != kErrorNone);
+
+    va_start(args, aFormat);
+    Log(aModuleName, kLogLevel, aError, aFormat, args);
+    va_end(args);
+
+exit:
+    return;
+}
+
+// Explicit instantiations
+template void Logger::LogOnError<kLogLevelNone>(const char *aModuleName, Error aError, const char *aFormat, ...);
+template void Logger::LogOnError<kLogLevelCrit>(const char *aModuleName, Error aError, const char *aFormat, ...);
+template void Logger::LogOnError<kLogLevelWarn>(const char *aModuleName, Error aError, const char *aFormat, ...);
+template void Logger::LogOnError<kLogLevelNote>(const char *aModuleName, Error aError, const char *aFormat, ...);
+template void Logger::LogOnError<kLogLevelInfo>(const char *aModuleName, Error aError, const char *aFormat, ...);
+template void Logger::LogOnError<kLogLevelDebg>(const char *aModuleName, Error aError, const char *aFormat, ...);
+
 void Logger::LogInModule(const char *aModuleName, LogLevel aLogLevel, const char *aFormat, ...)
 {
     va_list args;
@@ -96,6 +114,11 @@ void Logger::LogInModule(const char *aModuleName, LogLevel aLogLevel, const char
 
 void Logger::LogVarArgs(const char *aModuleName, LogLevel aLogLevel, const char *aFormat, va_list aArgs)
 {
+    Log(aModuleName, aLogLevel, kErrorNone, aFormat, aArgs);
+}
+
+void Logger::Log(const char *aModuleName, LogLevel aLogLevel, Error aError, const char *aFormat, va_list aArgs)
+{
     static const char kModuleNamePadding[] = "--------------";
 
     ot::String<OPENTHREAD_CONFIG_LOG_MAX_SIZE> logString;
@@ -103,14 +126,38 @@ void Logger::LogVarArgs(const char *aModuleName, LogLevel aLogLevel, const char 
     static_assert(sizeof(kModuleNamePadding) == kMaxLogModuleNameLength + 1, "Padding string is not correct");
 
 #if OPENTHREAD_CONFIG_LOG_PREPEND_UPTIME
-    ot::UptimeToString(ot::Instance::Get().Get<ot::UptimeTracker>().GetUptime(), logString,
-                       /* aInlcudeMsec */ true);
-    logString.Append(" ");
+    {
+        Instance *instance;
+
+#if !OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
+        instance = &ot::Instance::Get();
+#elif OPENTHREAD_CONFIG_LOG_INSTANCE_AWARE_API_ENABLE
+        instance = Instance::GetActiveInstance();
+        VerifyOrExit(instance != nullptr);
+#else
+#error "OPENTHREAD_CONFIG_LOG_PREPEND_UPTIME requires LOG_INSTANCE_AWARE_API_ENABLE under multi-instance"
+#endif
+        ot::UptimeToString(instance->Get<ot::UptimeTracker>().GetUptime(), logString, kUptimeStringIncludeMsec);
+        logString.Append(" ");
+    }
 #endif
 
 #if OPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE
-    VerifyOrExit(Instance::GetLogLevel() >= aLogLevel);
+
+#if !OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
+    VerifyOrExit(Instance::Get().GetLogLevel() >= aLogLevel);
+#elif !OPENTHREAD_CONFIG_LOG_INSTANCE_AWARE_API_ENABLE
+    VerifyOrExit(Instance::GetGlobalLogLevel() >= aLogLevel);
+#else
+    {
+        Instance *instance = Instance::GetActiveInstance();
+
+        VerifyOrExit(instance != nullptr);
+        VerifyOrExit(instance->GetLogLevel() >= aLogLevel);
+    }
 #endif
+
+#endif // OPENTHREAD_CONFIG_LOG_LEVEL_DYNAMIC_ENABLE
 
 #if OPENTHREAD_CONFIG_LOG_PREPEND_LEVEL
     {
@@ -130,26 +177,42 @@ void Logger::LogVarArgs(const char *aModuleName, LogLevel aLogLevel, const char 
     logString.Append("%.*s%s: ", kMaxLogModuleNameLength, aModuleName,
                      &kModuleNamePadding[StringLength(aModuleName, kMaxLogModuleNameLength)]);
 
+    if (aError != kErrorNone)
+    {
+        logString.Append("Failed to ");
+    }
+
     logString.AppendVarArgs(aFormat, aArgs);
 
+    if (aError != kErrorNone)
+    {
+        logString.Append(" - %s", ErrorToString(aError));
+    }
+
     logString.Append("%s", OPENTHREAD_CONFIG_LOG_SUFFIX);
+
+#if OPENTHREAD_CONFIG_LOG_INSTANCE_AWARE_API_ENABLE
+    {
+        Instance *instance;
+
+#if OPENTHREAD_CONFIG_MULTIPLE_INSTANCE_ENABLE
+        instance = Instance::GetActiveInstance();
+        VerifyOrExit(instance != nullptr);
+#else
+        instance = &Instance::Get();
+#endif
+
+        otPlatLogOutput(instance, aLogLevel, logString.AsCString());
+    }
+#else
     otPlatLog(aLogLevel, OT_LOG_REGION_CORE, "%s", logString.AsCString());
+#endif
 
     ExitNow();
 
 exit:
     return;
 }
-
-#if OT_SHOULD_LOG_AT(OT_LOG_LEVEL_WARN)
-void Logger::LogOnError(const char *aModuleName, Error aError, const char *aText)
-{
-    if (aError != kErrorNone)
-    {
-        LogAtLevel<kLogLevelWarn>(aModuleName, "Failed to %s: %s", aText, ErrorToString(aError));
-    }
-}
-#endif
 
 #if OPENTHREAD_CONFIG_LOG_PKT_DUMP
 

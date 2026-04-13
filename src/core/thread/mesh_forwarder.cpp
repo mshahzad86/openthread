@@ -1180,7 +1180,7 @@ exit:
 
     if (error == kErrorNone)
     {
-        if (message->GetOffset() >= message->GetLength())
+        if (message->DetermineLengthAfterOffset() == 0)
         {
             mReassemblyList.Dequeue(*message);
             IgnoreError(HandleDatagram(*message, aRxInfo.GetSrcAddr()));
@@ -1549,7 +1549,7 @@ void MeshForwarder::LogMessage(MessageAction       aAction,
         break;
     }
 
-    VerifyOrExit(Instance::GetLogLevel() >= logLevel);
+    VerifyOrExit(GetInstance().GetLogLevel() >= logLevel);
 
     switch (aMessage.GetType())
     {

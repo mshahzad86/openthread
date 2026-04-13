@@ -372,6 +372,34 @@ public:
      */
     Error CopyTo(SteeringData &aSteeringData) const;
 
+    /**
+     * Searches within a given message for Steering Data TLV, parses and validates the TLV value and returns the
+     * read Steering Data.
+     *
+     * @param[in]  aMessage       The message to search in.
+     * @param[out] aSteeringData  A reference to return the read Steering Data.
+     *
+     * @retval kErrorNone         Found the TLV, successfully parsed its value, @p aSteeringData is updated.
+     * @retval kErrorNotFound     No Steering Data TLV found in the @p aMessage.
+     * @retval kErrorParse        Found the TLV, but failed to parse it (e.g. not enough bytes in message).
+     * @retval kErrorInvalidArgs  Found the TLV, but TLV length is not valid for Steering Data (e.g., larger than max).
+     */
+    static Error FindIn(const Message &aMessage, SteeringData &aSteeringData);
+
+    /**
+     * Append a Steering Data TLV to a given message.
+     *
+     * @param[in] aMessage        The message to append to.
+     * @param[in] aSteeringData   The Steering Data value.
+     *
+     * @retval kErrorNone          Successfully appended the TLV to @p aMessage.
+     * @retval kErrorNoBufs        Insufficient available buffers to grow the message.
+     */
+    static Error AppendTo(Message &aMessage, const SteeringData &aSteeringData)
+    {
+        return Tlv::Append<SteeringDataTlv>(aMessage, aSteeringData.GetData(), aSteeringData.GetLength());
+    }
+
 private:
     uint8_t mSteeringData[SteeringData::kMaxLength];
 } OT_TOOL_PACKED_END;
@@ -726,48 +754,9 @@ private:
 } OT_TOOL_PACKED_BEGIN;
 
 /**
- * Implements Energy List TLV generation and parsing.
+ * Defines Energy List TLV constants and types.
  */
-OT_TOOL_PACKED_BEGIN
-class EnergyListTlv : public Tlv, public TlvInfo<Tlv::kEnergyList>
-{
-public:
-    /**
-     * Initializes the TLV.
-     */
-    void Init(void)
-    {
-        SetType(kEnergyList);
-        SetLength(sizeof(*this) - sizeof(Tlv));
-    }
-
-    /**
-     * Indicates whether or not the TLV appears to be well-formed.
-     *
-     * @retval TRUE   If the TLV appears to be well-formed.
-     * @retval FALSE  If the TLV does not appear to be well-formed.
-     */
-    bool IsValid(void) const { return true; }
-
-    /**
-     * Returns a pointer to the start of energy measurement list.
-     *
-     * @returns A pointer to the start start of energy energy measurement list.
-     */
-    const uint8_t *GetEnergyList(void) const { return mEnergyList; }
-
-    /**
-     * Returns the length of energy measurement list.
-     *
-     * @returns The length of energy measurement list.
-     */
-    uint8_t GetEnergyListLength(void) const { return Min(kMaxListLength, GetLength()); }
-
-private:
-    static constexpr uint8_t kMaxListLength = OPENTHREAD_CONFIG_TMF_ENERGY_SCAN_MAX_RESULTS;
-
-    uint8_t mEnergyList[kMaxListLength];
-} OT_TOOL_PACKED_END;
+typedef TlvInfo<Tlv::kEnergyList> EnergyListTlv;
 
 /**
  * Defines Provisioning TLV constants and types.

@@ -81,10 +81,9 @@ Error BleSecure::Start(ConnectCallback aConnectHandler, ReceiveCallback aReceive
     VerifyOrExit(advertisementData != nullptr, error = kErrorFailed);
     SuccessOrExit(error = otPlatBleGapAdvSetData(&GetInstance(), advertisementData, advertisementLen));
 
-    SuccessOrExit(error = mTls.Open());
+    SuccessOrExit(error = mTls.Open(HandleTransport, this));
     mTls.SetReceiveCallback(HandleTlsReceive, this);
     mTls.SetConnectCallback(HandleTlsConnectEvent, this);
-    SuccessOrExit(error = mTls.Bind(HandleTransport, this));
 
     // attempt to start BLE advertising only if everything else succeeded.
     mBleState             = kNotAdvertising;
@@ -591,7 +590,7 @@ exit:
         // mSendMessage is most likely not initialized; so appending a GeneralError status TLV to mSendMessage would
         // fail also. In this case it's not possible to recover TLV integrity and client/server sync.
         // It's handled by logging the error and (necessarily) closing the secure connection.
-        LogCrit("HandleTlsReceive: %s", ErrorToString(error));
+        LogCritOnError(error, "HandleTlsReceive");
         Disconnect();
     }
 }

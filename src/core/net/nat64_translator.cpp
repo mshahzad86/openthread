@@ -76,7 +76,7 @@ Translator::Translator(Instance &aInstance)
 
 Message *Translator::NewIp4Message(const Message::Settings &aSettings)
 {
-    Message *message = Get<Ip6::Ip6>().NewMessage(sizeof(Ip6::Header) - sizeof(Ip4::Header), aSettings);
+    Message *message = Get<Ip6::Ip6>().NewMessage(aSettings);
 
     if (message != nullptr)
     {
@@ -187,7 +187,7 @@ Error Translator::TranslateIp6ToIp4(Message &aMessage)
     }
 
     // TODO: Implement the logic for replying ICMP messages.
-    ip4Header.SetTotalLength(sizeof(Ip4::Header) + aMessage.GetLength() - aMessage.GetOffset());
+    ip4Header.SetTotalLength(sizeof(Ip4::Header) + aMessage.DetermineLengthAfterOffset());
 
     Checksum::UpdateMessageChecksum(aMessage, ip4Header.GetSource(), ip4Header.GetDestination(),
                                     ip4Header.GetProtocol());
@@ -249,7 +249,7 @@ Error Translator::TranslateIp4ToIp6(Message &aMessage)
     dstPortOrId = GetDestinationPortOrIcmp4Id(ip4Headers);
 #endif
 
-    aMessage.RemoveHeader(sizeof(Ip4::Header));
+    aMessage.RemoveHeader(ip4Headers.GetIp4Header().GetHeaderLength());
 
     ip6Header.Clear();
     ip6Header.InitVersionTrafficClassFlow();
@@ -285,7 +285,7 @@ Error Translator::TranslateIp4ToIp6(Message &aMessage)
     }
 
     // TODO: Implement the logic for replying ICMP datagrams.
-    ip6Header.SetPayloadLength(aMessage.GetLength() - aMessage.GetOffset());
+    ip6Header.SetPayloadLength(aMessage.DetermineLengthAfterOffset());
 
     Checksum::UpdateMessageChecksum(aMessage, ip6Header.GetSource(), ip6Header.GetDestination(),
                                     ip6Header.GetNextHeader());
@@ -343,7 +343,7 @@ void Translator::Mapping::CopyTo(AddressMapping &aMapping, TimeMilli aNow) const
     // might become active again before actually removed. Report the
     // mapping to be "just expired" to avoid confusion.
 
-    aMapping.mRemainingTimeMs = (mExpirationTime < aNow) ? 0 : mExpirationTime - aNow;
+    aMapping.mRemainingTimeMs = mExpirationTime.DetermineRemainingDurationFrom(aNow);
 }
 
 void Translator::Mapping::Free(void)

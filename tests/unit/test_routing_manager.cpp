@@ -242,11 +242,11 @@ void        DiscoverNat64Prefix(const Ip6::Prefix &aPrefix);
 extern "C" {
 
 #if OPENTHREAD_CONFIG_LOG_OUTPUT == OPENTHREAD_CONFIG_LOG_OUTPUT_PLATFORM_DEFINED
-void otPlatLog(otLogLevel aLogLevel, otLogRegion aLogRegion, const char *aFormat, ...)
+#if OPENTHREAD_CONFIG_LOG_INSTANCE_AWARE_API_ENABLE
+void otPlatLogOutput(otInstance *, otLogLevel, const char *aLogLine) { printf("   %s\n", aLogLine); }
+#else
+void otPlatLog(otLogLevel, otLogRegion, const char *aFormat, ...)
 {
-    OT_UNUSED_VARIABLE(aLogLevel);
-    OT_UNUSED_VARIABLE(aLogRegion);
-
     va_list args;
 
     printf("   ");
@@ -255,6 +255,7 @@ void otPlatLog(otLogLevel aLogLevel, otLogRegion aLogRegion, const char *aFormat
     va_end(args);
     printf("\n");
 }
+#endif
 #endif
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -287,14 +288,16 @@ uint32_t otPlatAlarmMilliGetNow(void) { return sNow; }
 //---------------------------------------------------------------------------------------------------------------------
 // otPlatInfraIf
 
-bool otPlatInfraIfHasAddress(uint32_t aInfraIfIndex, const otIp6Address *aAddress)
+bool otPlatInfraIfHasAddress(otInstance *aInstance, uint32_t aInfraIfIndex, const otIp6Address *aAddress)
 {
+    VerifyOrQuit(aInstance == sInstance);
     VerifyOrQuit(aInfraIfIndex == kInfraIfIndex);
 
     return AsCoreType(aAddress) == sInfraIfAddress;
 }
 
-otError otPlatInfraIfSendIcmp6Nd(uint32_t            aInfraIfIndex,
+otError otPlatInfraIfSendIcmp6Nd(otInstance         *aInstance,
+                                 uint32_t            aInfraIfIndex,
                                  const otIp6Address *aDestAddress,
                                  const uint8_t      *aBuffer,
                                  uint16_t            aBufferLength)
@@ -305,6 +308,7 @@ otError otPlatInfraIfSendIcmp6Nd(uint32_t            aInfraIfIndex,
     Log("otPlatInfraIfSendIcmp6Nd(aDestAddr: %s, aBufferLength:%u)", AsCoreType(aDestAddress).ToString().AsCString(),
         aBufferLength);
 
+    VerifyOrQuit(aInstance == sInstance);
     VerifyOrQuit(aInfraIfIndex == kInfraIfIndex);
 
     packet.Init(aBuffer, aBufferLength);
@@ -1382,19 +1386,23 @@ void VerifyFavoredOnLinkPrefix(const Ip6::Prefix &aPrefix)
     VerifyOrQuit(favoredPrefix == aPrefix);
 }
 
-void InitTest(bool aEnablBorderRouting = false, bool aAfterReset = false)
+void InitTest(bool aEnablBorderRouting = false, bool aResetInstance = false)
 {
     uint32_t delay = 10000;
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Initialize OT instance.
 
-    sNow      = 0;
-    sAlarmOn  = false;
-    sInstance = static_cast<Instance *>(testInitInstance());
+    sNow     = 0;
+    sAlarmOn = false;
 
-    if (aAfterReset)
+    if (!aResetInstance)
     {
+        sInstance = testInitInstance();
+    }
+    else
+    {
+        sInstance = testResetInstance(sInstance);
         delay += 26000; // leader reset sync delay
     }
 
@@ -4281,9 +4289,7 @@ void TestSavedOnLinkPrefixes(void)
 
     Log("Disabling and re-enabling OT Instance");
 
-    testFreeInstance(sInstance);
-
-    InitTest(/* aEnablBorderRouting */ true, /* aAfterReset */ true);
+    InitTest(/* aEnablBorderRouting */ true, /* aResetInstance */ true);
 
     sExpectedPio = kPioAdvertisingLocalOnLink;
 
@@ -4327,9 +4333,7 @@ void TestSavedOnLinkPrefixes(void)
 
     Log("Disabling and re-enabling OT Instance");
 
-    testFreeInstance(sInstance);
-
-    InitTest(/* aEnablBorderRouting */ false, /* aAfterReset */ true);
+    InitTest(/* aEnablBorderRouting */ false, /* aResetInstance */ true);
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Start Routing Manager.
@@ -4377,8 +4381,7 @@ void TestSavedOnLinkPrefixes(void)
 
     Log("Disabling and re-enabling OT Instance again");
 
-    testFreeInstance(sInstance);
-    InitTest(/* aEnablBorderRouting */ false, /* aAfterReset */ true);
+    InitTest(/* aEnablBorderRouting */ false, /* aResetInstance */ true);
 
     SuccessOrQuit(sInstance->Get<BorderRouter::RoutingManager>().SetEnabled(true));
     AdvanceTime(100);
@@ -5182,7 +5185,7 @@ void TestDhcp6PdConflict(void)
     // Now Advertise the PD prefix as on-link from a router first.
 
     Log("Router A advertises PD prefix as on-link before delegating the prefix");
-    SendRouterAdvert(routerAddressA, {Pio(pdPrefix, 200, 200)});
+    SendRouterAdvert(routerAddressA, {Pio(pdPrefix, 350, 350)});
 
     // Check that local OMR is used.
 
@@ -5204,7 +5207,7 @@ void TestDhcp6PdConflict(void)
     sExpectedRios.Clear();
     sExpectedRios.Add(localOmr);
 
-    AdvanceTime(100 * 1000);
+    AdvanceTime(200 * 1000);
     VerifyOrQuit(sExpectedRios.SawAll());
 
     VerifyOmrPrefixInNetData(localOmr, /* aDefaultRoute */ true);
@@ -5262,7 +5265,7 @@ void TestDhcp6PdConflict(void)
     sExpectedRios.Clear();
     sExpectedRios.Add(localOmr);
 
-    AdvanceTime(30 * 1000);
+    AdvanceTime(200 * 1000);
     VerifyOrQuit(sExpectedRios.SawAll());
 
     VerifyOmrPrefixInNetData(localOmr, /* aDefaultRoute */ false);

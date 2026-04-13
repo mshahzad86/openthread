@@ -218,6 +218,7 @@ ot_option(OT_EXTERNAL_HEAP OPENTHREAD_CONFIG_HEAP_EXTERNAL_ENABLE "external heap
 ot_option(OT_FIREWALL OPENTHREAD_POSIX_CONFIG_FIREWALL_ENABLE "firewall")
 ot_option(OT_HISTORY_TRACKER OPENTHREAD_CONFIG_HISTORY_TRACKER_ENABLE "history tracker")
 ot_option(OT_IP6_FRAGM OPENTHREAD_CONFIG_IP6_FRAGMENTATION_ENABLE "ipv6 fragmentation")
+ot_option(OT_IP6_INIT_ADDR_POOL OPENTHREAD_CONFIG_IP6_INIT_EXT_ADDR_POOL_ENABLE "IPv6 init address pool")
 ot_option(OT_JAM_DETECTION OPENTHREAD_CONFIG_JAM_DETECTION_ENABLE "jam detection")
 ot_option(OT_JOINER OPENTHREAD_CONFIG_JOINER_ENABLE "joiner")
 ot_option(OT_LINK_METRICS_INITIATOR OPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE "link metrics initiator")
@@ -305,6 +306,10 @@ if(ot_index EQUAL -1)
 endif()
 
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+set(OT_CRYPTO_LIB_VALUES "MBEDTLS" "PSA" "PLATFORM")
+ot_multi_option(OT_CRYPTO_LIB OT_CRYPTO_LIB_VALUES OPENTHREAD_CONFIG_CRYPTO_LIB OPENTHREAD_CONFIG_CRYPTO_LIB_ "set Crypto backend library")
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 set(OT_THREAD_VERSION_VALUES "1.1" "1.2" "1.3" "1.3.1" "1.4")
 set(OT_THREAD_VERSION "1.4" CACHE STRING "set Thread version")
 set_property(CACHE OT_THREAD_VERSION PROPERTY STRINGS "${OT_THREAD_VERSION_VALUES}")
@@ -361,7 +366,7 @@ ot_int_option(OT_RCP_TX_WAIT_TIME_SECS OPENTHREAD_SPINEL_CONFIG_RCP_TX_WAIT_TIME
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 if(NOT OT_EXTERNAL_MBEDTLS)
-    set(OT_MBEDTLS mbedtls)
+    set(OT_MBEDTLS mbedtls mbedcrypto)
     target_compile_definitions(ot-config INTERFACE "OPENTHREAD_CONFIG_ENABLE_BUILTIN_MBEDTLS=1")
 else()
     set(OT_MBEDTLS ${OT_EXTERNAL_MBEDTLS})

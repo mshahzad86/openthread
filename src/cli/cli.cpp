@@ -49,6 +49,7 @@
 #include <openthread/dataset_ftd.h>
 #include <openthread/diag.h>
 #include <openthread/dns.h>
+#include <openthread/heap.h>
 #include <openthread/icmp6.h>
 #include <openthread/nat64.h>
 #include <openthread/ncp.h>
@@ -163,7 +164,9 @@ void Interpreter::OutputResult(otError aError)
     {
         if (aError != OT_ERROR_NONE)
         {
-            OutputLine("Error %u: %s", aError, otThreadErrorToString(aError));
+            // For internal debug commands, prepending `*` to prevent cli client from treating this as a fatal error and
+            // exit.
+            OutputLine("* Error %u: %s", aError, otThreadErrorToString(aError));
         }
 
         ExitNow();
@@ -492,6 +495,42 @@ template <> otError Interpreter::Process<Cmd("batracker")>(Arg aArgs[])
      * @cli batracker agents
      * @code
      * batracker agents
+     * ServiceName: OTBR-by-Google-a7215b46a4f1fd
+     *     Port: 49154
+     *     Host: otbe345eefb12f7f9c
+     *     TxtData:
+     *         RecordVersion: 1
+     *         AgentId: e12f639deb66987e11a7215cd123
+     *         ThreadVersion: 1.4.0
+     *         NetworkName: ota7215b46a4f1fd
+     *         ExtendedPanId: 16dd92d88a32e63f
+     *         ActiveTimestamp: 1771558107
+     *         PartitionId: 0x10930b04
+     *         DomainName: DefaultDomain
+     *         BbrSeqNum: 23
+     *         BbrPort: 61631
+     *         OmrPrefix: fd70:ad65:47d9:1::/64
+     *         ExtAddress: 8e5d342e265b279c
+     *         VendorName: Google
+     *         ModelName: OTBR
+     *         StateBitmap:
+     *             ConnMode: pskc
+     *             ThreadIfState: active
+     *             Availability: high
+     *             ThreadRole: leader
+     *             BbrIsActive: yes
+     *             BbrIsPrimary: yes
+     *             EpskcSupported: yes
+     *             MultiAilState: not-detected
+     *             AdmitterSupported: yes
+     *     Address(es):
+     *         fd7c:af54:fada:4dcc:6aec:8aff:fe0d:e90b
+     *     MilliSecondsSinceDiscovered: 3523
+     *     MilliSecondsSinceLastChange: 3523
+     * Done
+     * @endcode
+     * @code
+     * batracker agents rawtxt
      * ServiceName: OTBR-by-Google-be345eefb12f7f9c
      *     Port: 49152
      *     Host: otbe345eefb12f7f9c
@@ -512,20 +551,45 @@ template <> otError Interpreter::Process<Cmd("batracker")>(Arg aArgs[])
      *     MilliSecondsSinceLastChange: 5237
      * Done
      * @endcode
+     * @cparam batracker agents [@ca{rawtxt}]
      * @par
-     * Outputs the list of discovered border agents. Information per agent:
+     * Outputs the list of discovered border agents. Information per agent includes:
      * - Service name
      * - Port number
      * - Host name
-     * - TXT data (key/value pairs per line)
+     * - TXT data (parsed human-readable information, or raw key/value pairs)
      * - Host addresses
      * - Milliseconds since agent was first discovered
      * - Milliseconds since the last change to agent info (port, addresses, TXT data)
+     * @par
+     * By default, if `OPENTHREAD_CONFIG_BORDER_AGENT_TXT_DATA_PARSER_ENABLE` is enabled, the TXT data is parsed and
+     * displayed in a human-readable format.
+     * @par
+     * The optional `rawtxt` argument forces the output of TXT data in its raw format (key/value pairs), even when the
+     * parser is enabled. If the parser is disabled, the raw format is always used.
+     * @sa otBorderAgentTxtDataParse
+     * @sa otBorderAgentTxtDataInfo
      */
     else if (aArgs[0] == "agents")
     {
         otBorderAgentTrackerIterator  iterator;
         otBorderAgentTrackerAgentInfo agent;
+        bool                          rawTxtData;
+
+#if OPENTHREAD_CONFIG_BORDER_AGENT_TXT_DATA_PARSER_ENABLE
+        if (!aArgs[1].IsEmpty())
+        {
+            VerifyOrExit(aArgs[1] == "rawtxt", error = OT_ERROR_INVALID_ARGS);
+            rawTxtData = true;
+        }
+        else
+        {
+            rawTxtData = false;
+        }
+#else
+        VerifyOrExit(aArgs[1].IsEmpty(), error = OT_ERROR_INVALID_ARGS);
+        rawTxtData = true;
+#endif
 
         otBorderAgentTrackerInitIterator(GetInstancePtr(), &iterator);
 
@@ -537,15 +601,31 @@ template <> otError Interpreter::Process<Cmd("batracker")>(Arg aArgs[])
 
             OutputFormat(kIndentSize, "TxtData:");
 
-            if (agent.mTxtData != nullptr)
+            if (agent.mTxtData == nullptr)
+            {
+                OutputLine(" (null)");
+            }
+            else if (rawTxtData)
             {
                 OutputNewLine();
                 OutputDnsTxtData(kIndentSize * 2, agent.mTxtData, agent.mTxtDataLength);
             }
+#if OPENTHREAD_CONFIG_BORDER_AGENT_TXT_DATA_PARSER_ENABLE
             else
             {
-                OutputLine(" (null)");
+                otBorderAgentTxtDataInfo txtInfo;
+
+                if (otBorderAgentTxtDataParse(agent.mTxtData, agent.mTxtDataLength, &txtInfo) != OT_ERROR_NONE)
+                {
+                    OutputLine(" (parse error) - use `rawtxt`");
+                }
+                else
+                {
+                    OutputNewLine();
+                    OutputBorderAgentTxtDataInfo(kIndentSize * 2, txtInfo);
+                }
             }
+#endif
 
             OutputFormat(kIndentSize, "Address(es):");
 
@@ -576,10 +656,114 @@ template <> otError Interpreter::Process<Cmd("batracker")>(Arg aArgs[])
         error = OT_ERROR_INVALID_ARGS;
     }
 
+exit:
     return error;
 }
 
 #endif // OPENTHREAD_CONFIG_BORDER_AGENT_TRACKER_ENABLE
+
+#if OPENTHREAD_CONFIG_BORDER_AGENT_TXT_DATA_PARSER_ENABLE
+void Interpreter::OutputBorderAgentTxtDataInfo(uint8_t aIndentSize, const otBorderAgentTxtDataInfo &aInfo)
+{
+    if (aInfo.mHasRecordVersion)
+    {
+        OutputLine(aIndentSize, "RecordVersion: %s", aInfo.mRecordVersion);
+    }
+
+    if (aInfo.mHasAgentId)
+    {
+        OutputFormat(aIndentSize, "AgentId: ");
+        OutputBytesLine(aInfo.mAgentId.mId);
+    }
+
+    if (aInfo.mHasThreadVersion)
+    {
+        OutputLine(aIndentSize, "ThreadVersion: %s", aInfo.mThreadVersion);
+    }
+
+    if (aInfo.mHasNetworkName)
+    {
+        OutputLine(aIndentSize, "NetworkName: %s", aInfo.mNetworkName.m8);
+    }
+
+    if (aInfo.mHasExtendedPanId)
+    {
+        OutputFormat(aIndentSize, "ExtendedPanId: ");
+        OutputBytesLine(aInfo.mExtendedPanId.m8);
+    }
+
+    if (aInfo.mHasActiveTimestamp)
+    {
+        OutputFormat(aIndentSize, "ActiveTimestamp: ");
+        OutputUint64Line(aInfo.mActiveTimestamp.mSeconds);
+    }
+
+    if (aInfo.mHasPartitionId)
+    {
+        OutputLine(aIndentSize, "PartitionId: 0x%lx", ToUlong(aInfo.mPartitionId));
+    }
+
+    if (aInfo.mHasDomainName)
+    {
+        OutputLine(aIndentSize, "DomainName: %s", aInfo.mDomainName.m8);
+    }
+
+    if (aInfo.mHasBbrSeqNum)
+    {
+        OutputLine(aIndentSize, "BbrSeqNum: %u", aInfo.mBbrSeqNum);
+    }
+
+    if (aInfo.mHasBbrPort)
+    {
+        OutputLine(aIndentSize, "BbrPort: %u", aInfo.mBbrPort);
+    }
+
+    if (aInfo.mHasOmrPrefix)
+    {
+        OutputFormat(aIndentSize, "OmrPrefix: ");
+        OutputIp6PrefixLine(aInfo.mOmrPrefix);
+    }
+
+    if (aInfo.mHasExtAddress)
+    {
+        OutputFormat(aIndentSize, "ExtAddress: ");
+        OutputExtAddressLine(aInfo.mExtAddress);
+    }
+
+    if (aInfo.mHasVendorName)
+    {
+        OutputLine(aIndentSize, "VendorName: %s", aInfo.mVendorName);
+    }
+
+    if (aInfo.mHasModelName)
+    {
+        OutputLine(aIndentSize, "ModelName: %s", aInfo.mModelName);
+    }
+
+    if (aInfo.mHasVendorOui)
+    {
+        OutputLine(aIndentSize, "VendorOui: %02X-%02X-%02X", aInfo.mVendorOui[0], aInfo.mVendorOui[1],
+                   aInfo.mVendorOui[2]);
+    }
+
+    if (aInfo.mHasStateBitmap)
+    {
+        uint8_t indent = aIndentSize + kIndentSize;
+
+        OutputLine(aIndentSize, "StateBitmap:");
+
+        OutputLine(indent, "ConnMode: %s", otBorderAgentConnModeToString(aInfo.mStateBitmap.mConnMode));
+        OutputLine(indent, "ThreadIfState: %s", otBorderAgentIfStateToString(aInfo.mStateBitmap.mThreadIfState));
+        OutputLine(indent, "Availability: %s", otBorderAgentAvailabilityToString(aInfo.mStateBitmap.mAvailability));
+        OutputLine(indent, "ThreadRole: %s", otBorderAgentThreadRoleToString(aInfo.mStateBitmap.mThreadRole));
+        OutputLine(indent, "BbrIsActive: %s", ToYesNo(aInfo.mStateBitmap.mBbrIsActive));
+        OutputLine(indent, "BbrIsPrimary: %s", ToYesNo(aInfo.mStateBitmap.mBbrIsPrimary));
+        OutputLine(indent, "EpskcSupported: %s", ToYesNo(aInfo.mStateBitmap.mEpskcSupported));
+        OutputLine(indent, "MultiAilState: %s", otBorderAgentMultiAilStateToString(aInfo.mStateBitmap.mMultiAilState));
+        OutputLine(indent, "AdmitterSupported: %s", ToYesNo(aInfo.mStateBitmap.mAdmitterSupported));
+    }
+}
+#endif // OPENTHREAD_CONFIG_BORDER_AGENT_TXT_DATA_PARSER_ENABLE
 
 #if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
 template <> otError Interpreter::Process<Cmd("br")>(Arg aArgs[]) { return mBr.Process(aArgs); }
@@ -2856,13 +3040,13 @@ template <> otError Interpreter::Process<Cmd("log")>(Arg aArgs[])
      * @endcode
      * @par
      * Get the log level.
-     * @sa otLoggingGetLevel
+     * @sa otGetLogLevel
      */
     if (aArgs[0] == "level")
     {
         if (aArgs[1].IsEmpty())
         {
-            OutputLine("%d", otLoggingGetLevel());
+            OutputLine("%u", otGetLogLevel(GetInstancePtr()));
         }
         else
         {
@@ -2876,12 +3060,12 @@ template <> otError Interpreter::Process<Cmd("log")>(Arg aArgs[])
              * Done
              * @endcode
              * @par api_copy
-             * #otLoggingSetLevel
+             * #otSetLogLevel
              * @cparam log level @ca{level}
              */
             VerifyOrExit(aArgs[2].IsEmpty(), error = OT_ERROR_INVALID_ARGS);
             SuccessOrExit(error = aArgs[1].ParseAsUint8(level));
-            error = otLoggingSetLevel(static_cast<otLogLevel>(level));
+            error = otSetLogLevel(GetInstancePtr(), static_cast<otLogLevel>(level));
 #else
             error = OT_ERROR_INVALID_ARGS;
 #endif
@@ -3142,6 +3326,12 @@ template <> otError Interpreter::Process<Cmd("ifconfig")>(Arg aArgs[])
     {
         SuccessOrExit(error = otIp6SetEnabled(GetInstancePtr(), false));
     }
+#if OPENTHREAD_CONFIG_IP6_INIT_EXT_ADDR_POOL_ENABLE && OPENTHREAD_CONFIG_CLI_IFCONFIG_INIT_ENABLE
+    else if (aArgs[0] == "init")
+    {
+        error = ProcessIfconfigInit(aArgs + 1);
+    }
+#endif
     else
     {
         ExitNow(error = OT_ERROR_INVALID_ARGS);
@@ -3150,6 +3340,60 @@ template <> otError Interpreter::Process<Cmd("ifconfig")>(Arg aArgs[])
 exit:
     return error;
 }
+
+#if OPENTHREAD_CONFIG_IP6_INIT_EXT_ADDR_POOL_ENABLE && OPENTHREAD_CONFIG_CLI_IFCONFIG_INIT_ENABLE
+
+otError Interpreter::ProcessIfconfigInit(Arg aArgs[])
+{
+    /**
+     * @cli ifconfig init
+     * @code
+     * ifconfig init 5 6
+     * Done
+     * @endcode
+     * @cparam ifconfig @ca{unicast-addr-pool-size} @ca{multicast-addr-pool-size}
+     * @par
+     * This command is intended for testing purposes only and requires `OPENTHREAD_CONFIG_CLI_IFCONFIG_INIT_ENABLE`
+     * and `OPENTHREAD_CONFIG_IP6_INIT_EXT_ADDR_POOL_ENABLE`.
+     * @par api_copy
+     * #otIp6Init
+     */
+
+    otError                  error;
+    uint16_t                 unicastPoolSize;
+    uint16_t                 multicastPoolSize;
+    otNetifAddress          *unicastPool   = nullptr;
+    otNetifMulticastAddress *multicastPool = nullptr;
+
+    SuccessOrExit(error = aArgs[0].ParseAsUint16(unicastPoolSize));
+    SuccessOrExit(error = aArgs[1].ParseAsUint16(multicastPoolSize));
+    VerifyOrExit(aArgs[2].IsEmpty(), error = OT_ERROR_INVALID_ARGS);
+
+    if (unicastPoolSize > 0)
+    {
+        unicastPool = static_cast<otNetifAddress *>(otHeapCAlloc(unicastPoolSize, sizeof(otNetifAddress)));
+        VerifyOrExit(unicastPool != nullptr, error = OT_ERROR_NO_BUFS);
+    }
+
+    if (multicastPoolSize > 0)
+    {
+        multicastPool =
+            static_cast<otNetifMulticastAddress *>(otHeapCAlloc(multicastPoolSize, sizeof(otNetifMulticastAddress)));
+        VerifyOrExit(multicastPool != nullptr, error = OT_ERROR_NO_BUFS);
+    }
+
+    SuccessOrExit(error = otIp6Init(GetInstancePtr(), unicastPool, unicastPoolSize, multicastPool, multicastPoolSize));
+    unicastPool   = nullptr;
+    multicastPool = nullptr;
+
+exit:
+    otHeapFree(unicastPool);
+    otHeapFree(multicastPool);
+
+    return error;
+}
+
+#endif // OPENTHREAD_CONFIG_IP6_INIT_EXT_ADDR_POOL_ENABLE && OPENTHREAD_CONFIG_CLI_IFCONFIG_INIT_ENABLE
 
 template <> otError Interpreter::Process<Cmd("instanceid")>(Arg aArgs[])
 {
@@ -3615,9 +3859,9 @@ template <> otError Interpreter::Process<Cmd("deviceprops")>(Arg aArgs[])
         const otDeviceProperties *props = otThreadGetDeviceProperties(GetInstancePtr());
 
         OutputLine("PowerSupply      : %s", Stringify(props->mPowerSupply, kPowerSupplyStrings));
-        OutputLine("IsBorderRouter   : %s", props->mIsBorderRouter ? "yes" : "no");
-        OutputLine("SupportsCcm      : %s", props->mSupportsCcm ? "yes" : "no");
-        OutputLine("IsUnstable       : %s", props->mIsUnstable ? "yes" : "no");
+        OutputLine("IsBorderRouter   : %s", ToYesNo(props->mIsBorderRouter));
+        OutputLine("SupportsCcm      : %s", ToYesNo(props->mSupportsCcm));
+        OutputLine("IsUnstable       : %s", ToYesNo(props->mIsUnstable));
         OutputLine("WeightAdjustment : %d", props->mLeaderWeightAdjustment);
     }
     /**
@@ -6112,10 +6356,10 @@ template <> otError Interpreter::Process<Cmd("singleton")>(Arg aArgs[])
 #if OPENTHREAD_CONFIG_SNTP_CLIENT_ENABLE
 template <> otError Interpreter::Process<Cmd("sntp")>(Arg aArgs[])
 {
-    otError          error = OT_ERROR_NONE;
-    uint16_t         port  = OT_SNTP_DEFAULT_SERVER_PORT;
-    Ip6::MessageInfo messageInfo;
-    otSntpQuery      query;
+    otError       error = OT_ERROR_NONE;
+    uint16_t      port  = OT_SNTP_DEFAULT_SERVER_PORT;
+    otMessageInfo messageInfo;
+    otSntpQuery   query;
 
     /**
      * @cli sntp query
@@ -6141,14 +6385,16 @@ template <> otError Interpreter::Process<Cmd("sntp")>(Arg aArgs[])
     {
         VerifyOrExit(!mSntpQueryingInProgress, error = OT_ERROR_BUSY);
 
+        ClearAllBytes(messageInfo);
+
         if (!aArgs[1].IsEmpty())
         {
-            SuccessOrExit(error = aArgs[1].ParseAsIp6Address(messageInfo.GetPeerAddr()));
+            SuccessOrExit(error = aArgs[1].ParseAsIp6Address(messageInfo.mPeerAddr));
         }
         else
         {
             // Use IPv6 address of default SNTP server.
-            SuccessOrExit(error = messageInfo.GetPeerAddr().FromString(OT_SNTP_DEFAULT_SERVER_IP));
+            SuccessOrExit(error = otIp6AddressFromString(OT_SNTP_DEFAULT_SERVER_IP, &messageInfo.mPeerAddr));
         }
 
         if (!aArgs[2].IsEmpty())
@@ -6156,9 +6402,8 @@ template <> otError Interpreter::Process<Cmd("sntp")>(Arg aArgs[])
             SuccessOrExit(error = aArgs[2].ParseAsUint16(port));
         }
 
-        messageInfo.SetPeerPort(port);
-
-        query.mMessageInfo = static_cast<const otMessageInfo *>(&messageInfo);
+        messageInfo.mPeerPort = port;
+        query.mMessageInfo    = &messageInfo;
 
         SuccessOrExit(error = otSntpClientQuery(GetInstancePtr(), &query, &Interpreter::HandleSntpResponse, this));
 
@@ -6620,14 +6865,11 @@ template <> otError Interpreter::Process<Cmd("debug")>(Arg aArgs[])
         "uptime",
 #endif
         "attachtime",
-        "channel",
-        "panid",
-        "extpanid",
+        "dataset active -ns",
         "ipaddr -v",
         "ipmaddr",
         "netdata show",
         "netdata show -x",
-        "partitionid",
         "leaderdata",
         "bufferinfo",
         "netstat",
@@ -7550,13 +7792,12 @@ void Interpreter::HandleDiagnosticGetResponse(otError              aError,
                                               const otMessageInfo *aMessageInfo,
                                               void                *aContext)
 {
-    static_cast<Interpreter *>(aContext)->HandleDiagnosticGetResponse(
-        aError, aMessage, static_cast<const Ip6::MessageInfo *>(aMessageInfo));
+    static_cast<Interpreter *>(aContext)->HandleDiagnosticGetResponse(aError, aMessage, aMessageInfo);
 }
 
-void Interpreter::HandleDiagnosticGetResponse(otError                 aError,
-                                              const otMessage        *aMessage,
-                                              const Ip6::MessageInfo *aMessageInfo)
+void Interpreter::HandleDiagnosticGetResponse(otError              aError,
+                                              const otMessage     *aMessage,
+                                              const otMessageInfo *aMessageInfo)
 {
     uint8_t               buf[16];
     uint16_t              bytesToPrint;
@@ -7771,7 +8012,7 @@ void Interpreter::OutputEnhRoute(uint8_t aIndentSize, const otNetworkDiagEnhRout
             continue;
         }
 
-        OutputFormat(" HasLink:%-3s LinkQualityOut:%u LinkQualityIn:%u ", routeData.mHasLink ? "yes" : "no",
+        OutputFormat(" HasLink:%-3s LinkQualityOut:%u LinkQualityIn:%u ", ToYesNo(routeData.mHasLink),
                      routeData.mLinkQualityOut, routeData.mLinkQualityIn);
 
         if (routeData.mNextHop == kInvalidRouterId)

@@ -421,7 +421,7 @@ Requires the `OPENTHREAD_CONFIG_BORDER_AGENT_MESHCOP_SERVICE_ENABLE` feature.
 
 The name can also be configured using the `OPENTHREAD_CONFIG_BORDER_AGENT_MESHCOP_SERVICE_BASE_NAME` configuration option (which is the recommended way to specify this name). This CLI command (and its corresponding API) is provided for projects where the name needs to be set after device initialization and at run-time.
 
-Per the Thread specification, the service instance should be a user-friendly name identifying the device model or product. A recommended format is "VendorName ProductName". To construct the full name and ensure name uniqueness, the OpenThread Border Agent module will append the Extended Address of the device (as 16-character hex digits) to the given base name. Note that the same name will be used for the ephemeral key service `_meshcop-e._udp` when the ephemeral key feature is enabled and used.
+Per the Thread specification, the service instance should be a user-friendly name identifying the device model or product. A recommended format is "VendorName ProductName". To construct the full name and ensure name uniqueness, the OpenThread Border Agent module appends a suffix (e.g., " #XXXX" where "XXXX" represents the last two bytes of the device's Extended Address in hex) to the given base name. If a name conflict is detected on the network, an additional index may be appended (e.g., " #XXXX (1)"). Note that the same name will be used for the ephemeral key service `_meshcop-e._udp` when the ephemeral key feature is enabled and used.
 
 ```bash
 ba servicebasename OpenThreadBorderAgent
@@ -653,6 +653,67 @@ mgmtPendingGet: 0
 Done
 ```
 
+### ba admitter
+
+Enables or disables Border Agent Admitter function, or outputs its status.
+
+All `ba admitter` sub-commands requires `OPENTHREAD_CONFIG_BORDER_AGENT_ADMITTER_ENABLE` in addition to `OPENTHREAD_CONFIG_BORDER_AGENT_ENABLE`.
+
+```bash
+> ba admitter
+Disabled
+Done
+
+> ba admitter enable
+Done
+
+> ba admitter
+Enabled
+Done
+```
+
+### ba admitter state
+
+Outputs the state of Border Agent Admitter.
+
+```bash
+> ba admitter state
+enabled: yes
+is-prime: yes
+is-active-commissioner: yes
+is-petition-rejected: no
+Done
+```
+
+### ba admitter joinerudpport
+
+Gets or sets the Border Agent Admitter Joiner UDP port.
+
+```bash
+> ba admitter joinerudpport
+1000
+Done
+
+> ba admitter joinerudpport 1001
+Done
+```
+
+### ba admitter enrollers
+
+Outputs the list of enrollers and accepted joiners per enroller.
+
+```bash
+> ba admitter enrollers
+Enroller - id: phone01275ABC
+    steering-data: [0042008000000000]
+    mode: 0xc0
+    msec-since-registered: 10478
+    Joiner - iid: a5d2e4f0c8b1937e
+        msec-since-accepted: 3299
+        msec-till-expiration: 418852
+Done
+```
+
 ### batracker enable
 
 Enables Border Agent Tracker.
@@ -691,7 +752,7 @@ running
 Done
 ```
 
-### batracker agents
+### batracker agents [rawtxt]
 
 Requires `OPENTHREAD_CONFIG_BORDER_AGENT_TRACKER_ENABLE`.
 
@@ -700,13 +761,54 @@ Outputs the list of discovered Border Agents. Information per Agent:
 - Service name
 - Port number
 - Host name
-- TXT data (key/value pairs per line)
+- TXT data (parsed human-readable information, or raw key/value pairs)
 - Host addresses
 - Milliseconds since agent was first discovered
 - Milliseconds since the last change to agent info (port, addresses, TXT data)
 
+By default, if `OPENTHREAD_CONFIG_BORDER_AGENT_TXT_DATA_PARSER_ENABLE` is enabled, the TXT data is parsed and displayed in a human-readable format.
+
+The optional `rawtxt` argument forces the output of TXT data in its raw format (key/value pairs), even when the parser is enabled. If the parser is disabled, the raw format is always used.
+
 ```bash
 > batracker agents
+ServiceName: OTBR-by-Google-a7215b46a4f1fd
+    Port: 49154
+    Host: otbe345eefb12f7f9c
+    TxtData:
+        RecordVersion: 1
+        AgentId: e12f639deb66987e11a7215cd123
+        ThreadVersion: 1.4.0
+        NetworkName: ota7215b46a4f1fd
+        ExtendedPanId: 16dd92d88a32e63f
+        ActiveTimestamp: 1771558107
+        PartitionId: 0x10930b04
+        DomainName: DefaultDomain
+        BbrSeqNum: 23
+        BbrPort: 61631
+        OmrPrefix: fd70:ad65:47d9:1::/64
+        ExtAddress: 8e5d342e265b279c
+        VendorName: Google
+        ModelName: OTBR
+        StateBitmap:
+            ConnMode: pskc
+            ThreadIfState: active
+            Availability: high
+            ThreadRole: leader
+            BbrIsActive: yes
+            BbrIsPrimary: yes
+            EpskcSupported: yes
+            MultiAilState: not-detected
+            AdmitterSupported: yes
+    Address(es):
+        fd7c:af54:fada:4dcc:6aec:8aff:fe0d:e90b
+    MilliSecondsSinceDiscovered: 3523
+    MilliSecondsSinceLastChange: 3523
+Done
+```
+
+```bash
+> batracker agents rawtxt
 ServiceName: OTBR-by-Google-be345eefb12f7f9c
     Port: 49152
     Host: otbe345eefb12f7f9c
@@ -1434,11 +1536,10 @@ The generated output encompasses the following information:
 - Version
 - Current state
 - Uptime and attach time
-- Channel
-- PAN IDs, extended MAC address, and RLOC16
+- Extended MAC address and RLOC16
+- Active Operational Dataset (redacted)
 - Unicast and multicast IPv6 address list
 - Network Data
-- Partition ID
 - Leader Data
 - Buffer info
 - Network statistics
@@ -1814,9 +1915,11 @@ Done
 
 Enable/Disable the "DNS name compression" mode.
 
-By default DNS name compression is enabled. When disabled, DNS names are appended as full and never compressed. This is applicable to OpenThread's DNS and SRP client/server modules.
+By default, DNS name compression is enabled. When disabled, DNS names are appended in full and are never compressed. This applies to OpenThread's DNS and SRP client/server modules.
 
-This is intended for testing only and available under `REFERENCE_DEVICE` config.
+DNS name compression cannot be disabled if the OpenThread mDNS module is enabled. Enabling the mDNS module will automatically enable name compression if it was previously disabled. Attempting to disable compression while the mDNS module is active will fail.
+
+This is intended for testing only and requires `OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE`.
 
 Get the current "DNS name compression" mode.
 

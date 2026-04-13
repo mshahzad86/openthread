@@ -220,7 +220,7 @@ void Admitter::ForwardJoinerRelayToEnrollers(const Coap::Msg &aMsg)
 
     VerifyOrExit(mCommissionerPetitioner.IsActiveCommissioner());
 
-    VerifyOrExit(aMsg.IsNonConfirmablePostRequest());
+    VerifyOrExit(aMsg.IsNonConfirmable());
     SuccessOrExit(Tlv::Find<JoinerIidTlv>(aMsg.mMessage, joinerIid));
 
     LogInfo("Processing %s from joiner %s", UriToString<kUriRelayRx>(), joinerIid.ToString().AsCString());
@@ -236,14 +236,16 @@ void Admitter::ForwardJoinerRelayToEnrollers(const Coap::Msg &aMsg)
         if (joiner != nullptr)
         {
             joiner->UpdateExpirationTime();
-            iter.GetSessionAs<Manager::CoapDtlsSession>()->ForwardUdpRelayToEnroller(aMsg.mMessage);
+            iter.GetSessionAs<Manager::CoapDtlsSession>()->ForwardUdpRelayToEnroller(aMsg.mMessage,
+                                                                                     /* aCheckEnrollerMode */ false);
             ExitNow();
         }
     }
 
     for (EnrollerIterator iter(GetInstance()); !iter.IsDone(); iter.Advance())
     {
-        iter.GetSessionAs<Manager::CoapDtlsSession>()->ForwardUdpRelayToEnroller(aMsg.mMessage);
+        iter.GetSessionAs<Manager::CoapDtlsSession>()->ForwardUdpRelayToEnroller(aMsg.mMessage,
+                                                                                 /* aCheckEnrollerMode */ true);
     }
 
 exit:
@@ -575,7 +577,7 @@ void Admitter::CommissionerPetitioner::SendPetitionIfNoOtherCommissioner(void)
         ExitNow();
     }
 
-    message.Reset(Get<Tmf::Agent>().NewPriorityConfirmablePostMessage(kUriLeaderPetition));
+    message.Reset(Get<Tmf::Agent>().AllocateAndInitPriorityConfirmablePostMessage(kUriLeaderPetition));
     VerifyOrExit(message != nullptr, error = kErrorNoBufs);
 
     writer.Append("otAdmitter");
@@ -707,7 +709,7 @@ Error Admitter::CommissionerPetitioner::SendKeepAlive(StateTlv::State aState)
     Error                   error = kErrorNone;
     OwnedPtr<Coap::Message> message;
 
-    message.Reset(Get<Tmf::Agent>().NewPriorityConfirmablePostMessage(kUriLeaderKeepAlive));
+    message.Reset(Get<Tmf::Agent>().AllocateAndInitPriorityConfirmablePostMessage(kUriLeaderKeepAlive));
     VerifyOrExit(message != nullptr, error = kErrorNoBufs);
 
     SuccessOrExit(error = Tlv::Append<StateTlv>(*message, aState));
@@ -807,11 +809,11 @@ void Admitter::CommissionerPetitioner::SendDataSet(void)
 
     IgnoreError(Get<Tmf::Agent>().AbortTransaction(HandleDataSetResponse, this));
 
-    message.Reset(Get<Tmf::Agent>().NewPriorityConfirmablePostMessage(kUriCommissionerSet));
+    message.Reset(Get<Tmf::Agent>().AllocateAndInitPriorityConfirmablePostMessage(kUriCommissionerSet));
     VerifyOrExit(message != nullptr, error = kErrorNoBufs);
 
     SuccessOrExit(error = Tlv::Append<CommissionerSessionIdTlv>(*message, mSessionId));
-    SuccessOrExit(error = Tlv::Append<SteeringDataTlv>(*message, mSteeringData.GetData(), mSteeringData.GetLength()));
+    SuccessOrExit(error = SteeringDataTlv::AppendTo(*message, mSteeringData));
 
     if (mJoinerUdpPort != 0)
     {
@@ -894,15 +896,12 @@ exit:
 
 Error Admitter::CommissionerPetitioner::SendToLeader(OwnedPtr<Coap::Message> aMessage, Coap::ResponseHandler aHandler)
 {
-    Error            error;
-    Tmf::MessageInfo messageInfo(GetInstance());
-
-    messageInfo.SetSockAddrToRlocPeerAddrToLeaderAloc();
+    Error error;
 
     // On success the message ownership is transferred.
 
-    SuccessOrExit(error = Get<Tmf::Agent>().SendMessage(*aMessage, messageInfo, aHandler,
-                                                        (aHandler != nullptr) ? this : nullptr));
+    SuccessOrExit(
+        error = Get<Tmf::Agent>().SendMessageToLeaderAloc(*aMessage, aHandler, (aHandler != nullptr) ? this : nullptr));
     aMessage.Release();
 
 exit:
@@ -1125,7 +1124,7 @@ void Manager::CoapDtlsSession::HandleEnrollerTmf(Uri aUri, const Coap::Msg &aMsg
     Error           error = kErrorNone;
     StateTlv::State responseState;
 
-    VerifyOrExit(aMsg.IsConfirmablePostRequest());
+    VerifyOrExit(aMsg.IsConfirmable());
 
     LogInfo("Receive %s", Admitter::EnrollerUriToString(aUri));
 
@@ -1194,10 +1193,9 @@ exit:
 
 Error Manager::CoapDtlsSession::ReadSteeringDataTlv(const Message &aMessage, SteeringData &aSteeringData)
 {
-    Error       error;
-    OffsetRange offsetRange;
+    Error error;
 
-    SuccessOrExit(error = Tlv::FindTlvValueOffsetRange(aMessage, Tlv::kSteeringData, offsetRange));
+    SuccessOrExit(error = SteeringDataTlv::FindIn(aMessage, aSteeringData));
 
     // Ensure the read steering data has a valid length. A length of
     // one byte is only allowed to indicate `PermitsAllJoiners()`.
@@ -1206,7 +1204,7 @@ Error Manager::CoapDtlsSession::ReadSteeringDataTlv(const Message &aMessage, Ste
 
     for (uint8_t validLength : Admitter::kEnrollerValidSteeringDataLengths)
     {
-        if (offsetRange.GetLength() == validLength)
+        if (aSteeringData.GetLength() == validLength)
         {
             error = kErrorNone;
             break;
@@ -1214,9 +1212,6 @@ Error Manager::CoapDtlsSession::ReadSteeringDataTlv(const Message &aMessage, Ste
     }
 
     SuccessOrExit(error);
-
-    IgnoreError(aSteeringData.Init(static_cast<uint8_t>(offsetRange.GetLength())));
-    aMessage.ReadBytes(offsetRange, aSteeringData.GetData());
 
     if (aSteeringData.GetLength() == 1)
     {
@@ -1365,20 +1360,12 @@ void Manager::CoapDtlsSession::SendEnrollerResponse(Uri                  aUri,
 {
     OwnedPtr<Coap::Message> response;
 
-    response.Reset(NewPriorityResponseMessage(aRequest));
+    response.Reset(AllocateAndInitPriorityResponseFor(aRequest));
     VerifyOrExit(response != nullptr);
 
     SuccessOrExit(Tlv::Append<StateTlv>(*response, static_cast<uint8_t>(aResponseState)));
 
-    switch (aUri)
-    {
-    case kUriEnrollerRegister:
-    case kUriEnrollerKeepAlive:
-        SuccessOrExit(AppendAdmitterTlvs(*response, Get<Admitter>().DetermineState()));
-        break;
-    default:
-        break;
-    }
+    SuccessOrExit(AppendAdmitterTlvs(*response, Get<Admitter>().DetermineState()));
 
     SuccessOrExit(SendMessage(response.PassOwnership()));
 
@@ -1386,14 +1373,14 @@ void Manager::CoapDtlsSession::SendEnrollerResponse(Uri                  aUri,
             StateTlv::StateToString(aResponseState), mIndex);
 
 exit:
-    return;
+    OT_UNUSED_VARIABLE(aUri);
 }
 
 void Manager::CoapDtlsSession::SendEnrollerReportState(uint8_t aAdmitterState)
 {
     OwnedPtr<Coap::Message> message;
 
-    message.Reset(NewNonConfirmablePostMessage(kUriEnrollerReportState));
+    message.Reset(AllocateAndInitNonConfirmablePostMessage(kUriEnrollerReportState));
     VerifyOrExit(message != nullptr);
 
     SuccessOrExit(AppendAdmitterTlvs(*message, aAdmitterState));
@@ -1428,12 +1415,16 @@ exit:
     return error;
 }
 
-void Manager::CoapDtlsSession::ForwardUdpRelayToEnroller(const Coap::Message &aMessage)
+void Manager::CoapDtlsSession::ForwardUdpRelayToEnroller(const Coap::Message &aMessage, bool aCheckEnrollerMode)
 {
     Error error = kErrorNone;
 
     VerifyOrExit(IsEnroller());
-    VerifyOrExit(mEnroller->ShouldForwardJoinerRelay());
+
+    if (aCheckEnrollerMode)
+    {
+        VerifyOrExit(mEnroller->ShouldForwardJoinerRelay());
+    }
 
     SuccessOrExit(error = ForwardUdpRelay(aMessage));
     LogInfo("Forward %s to enroller - session %u", UriToString<kUriRelayRx>(), mIndex);
