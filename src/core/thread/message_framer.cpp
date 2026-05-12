@@ -215,8 +215,23 @@ start:
     {
         if (aMacAddrs.mDestination.IsExtended())
         {
-            uint16_t panId = Get<MeshCoP::JoinerRouter>().GetOrAllocateNextPanId();
-            frameInfo.mPanIds.SetBothSourceDestination(panId);
+            Mac::Mac &mac = Get<Mac::Mac>();
+
+            if (mac.GetTemporaryPanIdValid())
+            {
+                // Pre-configured device: PAN ID was captured from its incoming frame
+                // (e.g., Parent Request arrived with dst PAN = device's assigned PAN).
+                // Use it and consume it so the same value is not reused for another peer.
+                frameInfo.mPanIds.SetBothSourceDestination(mac.GetTemporaryPanId());
+                mac.SetTemporaryPanIdValid(false);
+            }
+            else
+            {
+                // No PAN context from a received frame — this is a new commissioning joiner.
+                // Allocate a PAN ID from the pool for it.
+                uint16_t panId = Get<MeshCoP::JoinerRouter>().GetOrAllocateNextPanId();
+                frameInfo.mPanIds.SetBothSourceDestination(panId);
+            }
         }
         else
         {
