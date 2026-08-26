@@ -953,7 +953,7 @@ otRadioState otPlatRadioGetState(otInstance *aInstance)
     return GetRadioSpinel().GetState();
 }
 
-void otPlatRadioSetMacKey(otInstance             *aInstance,
+void otPlatRadioSetMacKeySingle(otInstance             *aInstance,
                           uint8_t                 aKeyIdMode,
                           uint8_t                 aKeyIndex,
                           const otMacKeyMaterial *aPrevKey,
@@ -962,6 +962,17 @@ void otPlatRadioSetMacKey(otInstance             *aInstance,
                           otRadioKeyType          aKeyType)
 {
     SuccessOrDie(GetRadioSpinel().SetMacKey(aKeyIdMode, aKeyIndex, aPrevKey, aCurrKey, aNextKey));
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aKeyType);
+}
+
+void otPlatRadioSetMacKey(otInstance             *aInstance,
+                          uint8_t                 aKeyIdMode,
+                          uint8_t                 aKeyId,
+                          otPanIdKeyMaterialMap aPanIdKeyMaterials,
+                          otRadioKeyType          aKeyType)
+{
+    SuccessOrDie(GetRadioSpinel().SetMacKey(aKeyIdMode, aKeyId, aPanIdKeyMaterials));
     OT_UNUSED_VARIABLE(aInstance);
     OT_UNUSED_VARIABLE(aKeyType);
 }

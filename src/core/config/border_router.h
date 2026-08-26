@@ -51,7 +51,7 @@
  * Define to 1 to enable Border Router support.
  */
 #ifndef OPENTHREAD_CONFIG_BORDER_ROUTER_ENABLE
-#define OPENTHREAD_CONFIG_BORDER_ROUTER_ENABLE 0
+#define OPENTHREAD_CONFIG_BORDER_ROUTER_ENABLE 1
 #endif
 
 /**

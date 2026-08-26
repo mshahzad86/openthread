@@ -49,6 +49,7 @@ void Child::Info::SetFrom(const Child &aChild)
     mTimeout             = aChild.GetTimeout();
     mRloc16              = aChild.GetRloc16();
     mChildId             = Mle::ChildIdFromRloc16(aChild.GetRloc16());
+    mPanId               = aChild.GetPanId();
     mNetworkDataVersion  = aChild.GetNetworkDataVersion();
     mAge                 = Time::MsecToSec(TimerMilli::GetNow() - aChild.GetLastHeard());
     mLinkQualityIn       = aChild.GetLinkQualityIn();

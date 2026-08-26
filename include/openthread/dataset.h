@@ -203,6 +203,8 @@ typedef struct otOperationalDatasetComponents
     bool mIsMeshLocalPrefixPresent;  ///< TRUE if Mesh Local Prefix is present, FALSE otherwise.
     bool mIsDelayPresent;            ///< TRUE if Delay Timer is present, FALSE otherwise.
     bool mIsPanIdPresent;            ///< TRUE if PAN ID is present, FALSE otherwise.
+    bool mIsPanIdsPresent;           ///< TRUE if PAN IDs list is present, FALSE otherwise.
+    bool mIsPanKeysPresent;          ///< TRUE if PAN Keys list is present, FALSE otherwise.
     bool mIsChannelPresent;          ///< TRUE if Channel is present, FALSE otherwise.
     bool mIsPskcPresent;             ///< TRUE if PSKc is present, FALSE otherwise.
     bool mIsSecurityPolicyPresent;   ///< TRUE if Security Policy is present, FALSE otherwise.
@@ -220,6 +222,27 @@ typedef struct otTimestamp
     bool     mAuthoritative;
 } otTimestamp;
 
+#define OT_MAX_PAN_IDS 64  ///< Maximum number of PAN IDs that can be stored
+#define OT_MAX_PAN_KEYS 64  ///< Maximum number of PAN Keys that can be stored
+
+/**
+ * Represents a list of PAN IDs.
+ */
+typedef struct otPanIdList
+{
+    otPanId mPanIds[OT_MAX_PAN_IDS];  ///< Array of PAN IDs
+    uint8_t mCount;                   ///< Number of PAN IDs in the list
+} otPanIdList;
+
+/** 
+ * Represents a list of PAN Keys.
+ */
+typedef struct otPanKeyList
+{
+    otNetworkKey mPanKeys[OT_MAX_PAN_KEYS];  ///< Array of PAN Keys
+    uint8_t mCount;                          ///< Number of PAN Keys in the list
+} otPanKeyList;
+
 /**
  * Represents an Active or Pending Operational Dataset.
  *
@@ -235,6 +258,8 @@ typedef struct otOperationalDataset
     otMeshLocalPrefix              mMeshLocalPrefix;  ///< Mesh Local Prefix
     uint32_t                       mDelay;            ///< Delay Timer
     otPanId                        mPanId;            ///< PAN ID
+    otPanIdList                    mPanIds;           ///< List of PAN IDs
+    otPanKeyList                   mPanKeys;          ///< List of PAN Keys
     uint16_t                       mChannel;          ///< Channel
     uint16_t                       mWakeupChannel;    ///< Wake-up Channel
     otPskc                         mPskc;             ///< PSKc
@@ -286,7 +311,7 @@ typedef enum otMeshcopTlvType
     OT_MESHCOP_TLV_JOINER_IID               = 19,  ///< meshcop Joiner IID TLV
     OT_MESHCOP_TLV_JOINER_RLOC              = 20,  ///< meshcop Joiner Router Locator TLV
     OT_MESHCOP_TLV_JOINER_ROUTER_KEK        = 21,  ///< meshcop Joiner Router KEK TLV
-    OT_MESHCOP_TLV_DURATION                 = 23,  ///< meshcop Duration TLV
+    OT_MESHCOP_TLV_DURATION                 = 22,  ///< meshcop Duration TLV
     OT_MESHCOP_TLV_PROVISIONING_URL         = 32,  ///< meshcop Provisioning URL TLV
     OT_MESHCOP_TLV_VENDOR_NAME_TLV          = 33,  ///< meshcop Vendor Name TLV
     OT_MESHCOP_TLV_VENDOR_MODEL_TLV         = 34,  ///< meshcop Vendor Model TLV
@@ -310,6 +335,8 @@ typedef enum otMeshcopTlvType
     OT_MESHCOP_TLV_DISCOVERYREQUEST         = 128, ///< meshcop Discovery Request TLV
     OT_MESHCOP_TLV_DISCOVERYRESPONSE        = 129, ///< meshcop Discovery Response TLV
     OT_MESHCOP_TLV_JOINERADVERTISEMENT      = 241, ///< meshcop Joiner Advertisement TLV (experimental)
+    OT_MESHCOP_TLV_PANIDS                   = 242,   ///< meshcop Pan Ids List TLV
+    OT_MESHCOP_TLV_PANKEYS                  = 243,   ///< meshcop Pan Keys List TLV
 } otMeshcopTlvType;
 
 /**

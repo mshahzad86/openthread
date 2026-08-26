@@ -31,11 +31,13 @@
  *   This file includes implementation of `MessageFramer`.
  */
 
-#include "message_framer.hpp"
+#include "message_framer.hpp" 
 
 #include "instance/instance.hpp"
 
 namespace ot {
+
+RegisterLogModule("MsgFramer");
 
 MessageFramer::MessageFramer(Instance &aInstance)
     : InstanceLocator(aInstance)
@@ -129,6 +131,9 @@ void MessageFramer::PrepareMacHeaders(Mac::TxFrame                 &aTxFrame,
 void MessageFramer::PrepareEmptyFrame(Mac::TxFrame &aFrame, const Mac::Address &aMacDest, bool aAckRequest)
 {
     Mac::TxFrame::BuildInfo buildInfo;
+#if OPENTHREAD_FTD
+    Neighbor          *neighbor;
+#endif
 
     buildInfo.mAddrs.mSource.SetShort(Get<Mac::Mac>().GetShortAddress());
 
@@ -138,7 +143,21 @@ void MessageFramer::PrepareEmptyFrame(Mac::TxFrame &aFrame, const Mac::Address &
     }
 
     buildInfo.mAddrs.mDestination = aMacDest;
-    buildInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+
+#if OPENTHREAD_FTD
+    neighbor = Get<NeighborTable>().FindNeighbor(aMacDest);
+
+    if ((neighbor != nullptr) && neighbor->IsStateValid() && Get<ChildTable>().Contains(*neighbor))
+    {
+        const Child *child = static_cast<const Child *>(neighbor);
+
+        buildInfo.mPanIds.SetBothSourceDestination(child->GetPanId());
+    }
+    else
+#endif
+    {
+        buildInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+    }
 
     buildInfo.mType          = Mac::Frame::kTypeData;
     buildInfo.mSecurityLevel = Mac::Frame::kSecurityEncMic32;
@@ -183,8 +202,54 @@ start:
             buildInfo.mKeyIdMode = Mac::Frame::kKeyIdMode1;
         }
     }
+#if OPENTHREAD_FTD
+     // Check if destination is a child device and get its PAN ID
 
+
+    Neighbor *neighbor = Get<NeighborTable>().FindNeighbor(aMacAddrs.mDestination);
+    if (neighbor != nullptr && neighbor->IsStateValid())
+    {
+        // If it's a child device, use its PAN ID
+        if (Get<ChildTable>().Contains(*neighbor))
+        {
+            const Child *child = static_cast<const Child *>(neighbor);
+            buildInfo.mPanIds.SetBothSourceDestination(child->GetPanId());  // Use child's PAN ID
+        }
+        else
+        {
+            buildInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+        }
+    }
+    else
+    {
+        if (aMacAddrs.mDestination.IsExtended())
+        {
+            Mac::Mac &mac = Get<Mac::Mac>();
+
+            if (mac.GetTemporaryPanIdValid())
+            {
+                // Pre-configured device: PAN ID was captured from its incoming frame
+                // (e.g., Parent Request arrived with dst PAN = device's assigned PAN).
+                // Use it and consume it so the same value is not reused for another peer.
+                buildInfo.mPanIds.SetBothSourceDestination(mac.GetTemporaryPanId());
+                mac.SetTemporaryPanIdValid(false);
+            }
+            else
+            {
+                // No PAN context from a received frame — this is a new commissioning joiner.
+                // Allocate a PAN ID from the pool for it.
+                uint16_t panId = Get<MeshCoP::JoinerRouter>().GetOrAllocateNextPanId();
+                buildInfo.mPanIds.SetBothSourceDestination(panId);
+            }
+        }
+        else
+        {
+            buildInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+        }
+    }
+#else
     buildInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+#endif
 
     if (aMessage.IsSubTypeMle())
     {
@@ -197,8 +262,16 @@ start:
             break;
 
         case Mle::kCommandDiscoveryRequest:
+            buildInfo.mPanIds.SetDestination(aMessage.GetPanId());
+            break;
+
         case Mle::kCommandDiscoveryResponse:
             buildInfo.mPanIds.SetDestination(aMessage.GetPanId());
+#if OPENTHREAD_FTD
+            buildInfo.mPanIds.SetSource(Get<MeshCoP::JoinerRouter>().GetOrAllocateNextPanId());
+#else
+            buildInfo.mPanIds.SetSource(Get<Mac::Mac>().GetPanId());
+#endif
             break;
 
         default:

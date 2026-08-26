@@ -35,6 +35,7 @@
 #if OPENTHREAD_FTD
 
 #include "instance/instance.hpp"
+#include "thread/device_assignment.hpp"
 
 namespace ot {
 namespace Mle {
@@ -1521,6 +1522,7 @@ void Mle::HandleParentRequest(RxInfo &aRxInfo)
     DeviceMode         mode;
     uint32_t           delay;
     ParentResponseInfo info;
+    Mac::PanId         panId;
 
     Log(kMessageReceive, kTypeParentRequest, aRxInfo.mMessageInfo.GetPeerAddr());
 
@@ -1556,6 +1558,9 @@ void Mle::HandleParentRequest(RxInfo &aRxInfo)
     }
 
     SuccessOrExit(error = aRxInfo.mMessage.ReadChallengeTlv(info.mRxChallenge));
+    
+    // Get the PAN ID from the message
+    panId = aRxInfo.mMessage.GetPanId();
 
     child = mChildTable.FindChild(info.mChildExtAddress, Child::kInStateAnyExceptInvalid);
 
@@ -1565,6 +1570,7 @@ void Mle::HandleParentRequest(RxInfo &aRxInfo)
 
         InitNeighbor(*child, aRxInfo);
         child->SetState(Neighbor::kStateParentRequest);
+        child->SetPanId(panId); // Store the PAN ID for this child
 #if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
         child->SetTimeSyncEnabled(Tlv::Find<TimeRequestTlv>(aRxInfo.mMessage, nullptr, 0) == kErrorNone);
 #endif
@@ -2873,8 +2879,53 @@ Error Mle::SendChildIdResponse(Child &aChild)
             break;
 
         case Tlv::kActiveDataset:
-            SuccessOrExit(error = message->AppendActiveDatasetTlv());
+        {
+            MeshCoP::Dataset      dataset;
+            const PanIdAssignment *assignment = nullptr;
+            uint16_t               pendingPanId;
+            Ip6::InterfaceIdentifier dummyIid;
+            KeyManager            &keyMgr = Get<KeyManager>();
+
+            if (Get<MeshCoP::JoinerRouter>().LookupPendingPanId(dummyIid, pendingPanId))
+            {
+                assignment = FindPanIdAssignment(keyMgr.GetPanIdPool(),
+                                                 keyMgr.GetPanIdPoolSize(),
+                                                 pendingPanId);
+            }
+
+            if (assignment == nullptr)
+            {
+                assignment = AllocateNextPanId(keyMgr.GetPanIdPool(),
+                                               keyMgr.GetPanIdPoolSize(),
+                                               mChildTable);
+            }
+
+            error = Get<MeshCoP::ActiveDatasetManager>().Read(dataset);
+
+            if (error == kErrorNone)
+            {
+                if (assignment != nullptr)
+                {
+                    NetworkKey networkKey;
+
+                    memcpy(networkKey.m8, assignment->mNetworkKey, OT_NETWORK_KEY_SIZE);
+                    IgnoreError(dataset.Write<MeshCoP::PanIdTlv>(assignment->mPanId));
+                    IgnoreError(dataset.Write<MeshCoP::NetworkKeyTlv>(networkKey));
+                    aChild.SetPanId(assignment->mPanId);
+                    LogInfo("#### Assigned PAN 0x%04x for child", assignment->mPanId);
+                }
+
+                dataset.RemoveTimestamp(MeshCoP::Dataset::kActive);
+                SuccessOrExit(error = Tlv::AppendTlv(*message, Tlv::kActiveDataset, dataset.GetBytes(),
+                                                     dataset.GetLength()));
+            }
+            else
+            {
+                error = kErrorNone;
+            }
+
             break;
+        }
 
         case Tlv::kPendingDataset:
             SuccessOrExit(error = message->AppendPendingDatasetTlv());

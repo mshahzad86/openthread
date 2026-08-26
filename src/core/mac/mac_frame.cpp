@@ -39,10 +39,15 @@
 #include "common/debug.hpp"
 #include "common/log.hpp"
 #include "common/num_utils.hpp"
+#include "radio/trel_link.hpp"
+#include "instance/instance.hpp"
+#include "mac/mac.hpp"
 #include "crypto/aes_ccm.hpp"
 
 namespace ot {
 namespace Mac {
+
+RegisterLogModule("MacFrame");
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -191,7 +196,21 @@ void TxFrame::BuildInfo::PrepareHeadersIn(TxFrame &aTxFrame) const
 
     if (IsDstPanIdPresent(fcf))
     {
+#if OPENTHREAD_MTD || OPENTHREAD_FTD
+        auto &instance = ot::Instance::Get();
+        auto &mac = instance.Get<ot::Mac::Mac>();
+        if (mac.GetTemporaryPanIdValid() && !mac.IsPanIdInList(mPanIds.GetDestination()))
+        {
+            IgnoreError(builder.AppendUint<kLittleEndian>(mac.GetTemporaryPanId()));
+            mac.SetTemporaryPanIdValid(false);
+        }
+        else
+        {
+            IgnoreError(builder.AppendUint<kLittleEndian>(mPanIds.GetDestination()));
+        }
+#else
         IgnoreError(builder.AppendUint<kLittleEndian>(mPanIds.GetDestination()));
+#endif
     }
 
     IgnoreError(builder.AppendMacAddress(mAddrs.mDestination));

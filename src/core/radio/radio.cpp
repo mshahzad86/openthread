@@ -86,6 +86,7 @@ void Radio::Init(void)
 #if OPENTHREAD_CONFIG_RADIO_LINK_IEEE_802_15_4_ENABLE
     Mac::ExtAddress allZeroExtAddress;
     Mac::KeyTrio    emptyKeyTrio;
+    Mac::KeyMaterial emptyKeyMaterial;
 
 #if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
     SuccessOrAssert(ResetCsl());
@@ -105,6 +106,73 @@ void Radio::Init(void)
     allZeroExtAddress.Clear();
     SetExtendedAddress(allZeroExtAddress);
     SetShortAddress(Mac::kShortAddrInvalid);
+    emptyKeyMaterial.Clear();
+    PanIdKeyMaterialMap keyMaterials = {
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial},
+        {0, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial, emptyKeyMaterial}
+    };
+
+    SetMacKey(0,0,keyMaterials);
 
     emptyKeyTrio.Clear();
     SetMode1MacKeys(emptyKeyTrio);
