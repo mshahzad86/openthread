@@ -104,6 +104,7 @@ private:
     void HandleLinkMetricsConfigEnhAckProbingMgmtResponse(const otIp6Address *aAddress, otLinkMetricsStatus aStatus);
     void HandleLinkMetricsMgmtResponse(const otIp6Address *aAddress, otLinkMetricsStatus aStatus);
 
+#if OPENTHREAD_CONFIG_CLI_LINK_METRICS_ENH_ACK_VERBOSE_ENABLE
     static void HandleLinkMetricsEnhAckProbingIe(otShortAddress             aShortAddress,
                                                  const otExtAddress        *aExtAddress,
                                                  const otLinkMetricsValues *aMetricsValues,
@@ -112,10 +113,9 @@ private:
     void HandleLinkMetricsEnhAckProbingIe(otShortAddress             aShortAddress,
                                           const otExtAddress        *aExtAddress,
                                           const otLinkMetricsValues *aMetricsValues);
+#endif
 
     const char *LinkMetricsStatusToStr(otLinkMetricsStatus aStatus);
-
-    void OutputResult(otError aError);
 
     bool mQuerySync : 1;
     bool mConfigForwardTrackingSeriesSync : 1;

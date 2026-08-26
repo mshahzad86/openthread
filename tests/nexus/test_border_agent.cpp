@@ -1311,6 +1311,10 @@ void ValidateMeshCoPTxtData(TxtData &aTxtData, Node &aNode, bool aExpectVendorIn
     static constexpr uint32_t kThreadRoleLeader             = 3 << 9;
     static constexpr uint32_t kFlagEpskcSupported           = 1 << 11;
     static constexpr uint32_t kFlagAdmitterSupported        = 1 << 14;
+#if OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
+    static constexpr uint32_t kFlagBbrIsActive  = 1 << 7;
+    static constexpr uint32_t kFlagBbrIsPrimary = 1 << 8;
+#endif
 
     MeshCoP::BorderAgent::Id id;
     BaTxtData::Info          info;
@@ -1449,6 +1453,35 @@ void ValidateMeshCoPTxtData(TxtData &aTxtData, Node &aNode, bool aExpectVendorIn
         VerifyOrQuit(!info.mStateBitmap.mAdmitterSupported);
     }
 
+#if OPENTHREAD_CONFIG_BACKBONE_ROUTER_ENABLE
+    {
+        bool bbrEnabled = aNode.Get<Mle::Mle>().IsAttached() && aNode.Get<BackboneRouter::Local>().IsEnabled();
+        bool bbrPrimary = aNode.Get<Mle::Mle>().IsAttached() && aNode.Get<BackboneRouter::Local>().IsPrimary();
+
+        if (bbrEnabled)
+        {
+            VerifyOrQuit(stateBitmap & kFlagBbrIsActive);
+            VerifyOrQuit(info.mStateBitmap.mBbrIsActive);
+        }
+        else
+        {
+            VerifyOrQuit(!(stateBitmap & kFlagBbrIsActive));
+            VerifyOrQuit(!info.mStateBitmap.mBbrIsActive);
+        }
+
+        if (bbrPrimary)
+        {
+            VerifyOrQuit(stateBitmap & kFlagBbrIsPrimary);
+            VerifyOrQuit(info.mStateBitmap.mBbrIsPrimary);
+        }
+        else
+        {
+            VerifyOrQuit(!(stateBitmap & kFlagBbrIsPrimary));
+            VerifyOrQuit(!info.mStateBitmap.mBbrIsPrimary);
+        }
+    }
+#endif
+
     if (aExpectVendorInfo)
     {
         const char *expectedVendorName = (aVendorName != nullptr) ? aVendorName : aNode.Get<VendorInfo>().GetName();
@@ -1461,6 +1494,13 @@ void ValidateMeshCoPTxtData(TxtData &aTxtData, Node &aNode, bool aExpectVendorIn
         aTxtData.ValidateKey("mn", expectedModelName);
         VerifyOrQuit(info.mHasModelName);
         VerifyOrQuit(StringMatch(info.mModelName, expectedModelName));
+
+        if (aNode.Get<VendorInfo>().GetOui().IsValid())
+        {
+            const VendorInfo::Oui &oui = aNode.Get<VendorInfo>().GetOui();
+
+            aTxtData.ValidateKey("vo", oui.GetBytes(), oui.GetSize());
+        }
     }
     else
     {
@@ -2348,6 +2388,55 @@ void TestBorderAgentServiceRegistration(void)
     VerifyOrQuit(foundService);
 
     node0.Get<Dns::Multicast::Core>().FreeIterator(*iterator);
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    Log("Enable Backbone Router on node0 and validate state bitmap updates");
+
+    node0.Get<BorderRouter::InfraIf>().Init(kInfraIfIndex, true);
+    node0.Get<BorderRouter::RoutingManager>().Init();
+    SuccessOrQuit(node0.Get<BorderRouter::RoutingManager>().SetEnabled(true));
+    node0.Get<BackboneRouter::Local>().SetEnabled(true);
+
+    nexus.AdvanceTime(10 * Time::kOneSecondInMsec);
+
+    iterator = node0.Get<Dns::Multicast::Core>().AllocateIterator();
+    VerifyOrQuit(iterator != nullptr);
+
+    foundService = false;
+    while (node0.Get<Dns::Multicast::Core>().GetNextService(*iterator, service, entryState) == kErrorNone)
+    {
+        if (StringMatch(service.mServiceType, "_meshcop._udp"))
+        {
+            VerifyOrQuit(!foundService);
+            foundService = true;
+            ValidateRegisteredServiceData(service, node0);
+        }
+    }
+    VerifyOrQuit(foundService);
+    node0.Get<Dns::Multicast::Core>().FreeIterator(*iterator);
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    Log("Disable Backbone Router on node0 and validate state bitmap updates");
+
+    node0.Get<BackboneRouter::Local>().SetEnabled(false);
+
+    nexus.AdvanceTime(10 * Time::kOneSecondInMsec);
+
+    iterator = node0.Get<Dns::Multicast::Core>().AllocateIterator();
+    VerifyOrQuit(iterator != nullptr);
+
+    foundService = false;
+    while (node0.Get<Dns::Multicast::Core>().GetNextService(*iterator, service, entryState) == kErrorNone)
+    {
+        if (StringMatch(service.mServiceType, "_meshcop._udp"))
+        {
+            VerifyOrQuit(!foundService);
+            foundService = true;
+            ValidateRegisteredServiceData(service, node0);
+        }
+    }
+    VerifyOrQuit(foundService);
+    node0.Get<Dns::Multicast::Core>().FreeIterator(*iterator);
 }
 
 void TestBorderAgentServiceRegistrationRename(void)
@@ -2566,6 +2655,137 @@ void TestBorderAgentServiceRegistrationRename(void)
     node1.Get<Dns::Multicast::Core>().FreeIterator(*iterator);
 }
 
+void TestBorderAgentSessionsLimit(void)
+{
+    Core                     nexus;
+    Node                    &node0 = nexus.CreateNode();
+    Node                    *nodes[20];
+    Ip6::SockAddr            sockAddr;
+    Pskc                     pskc;
+    Manager::SessionIterator iter;
+    Manager::SessionInfo     sessionInfo;
+    uint8_t                  sessionCount;
+
+    Log("------------------------------------------------------------------------------------------------------");
+    Log("TestBorderAgentSessionsLimit");
+
+    nexus.AdvanceTime(0);
+    SuccessOrQuit(node0.SetLogLevel(kLogLevelInfo));
+
+    node0.Form();
+
+    nexus.AdvanceTime(50 * Time::kOneSecondInMsec);
+    VerifyOrQuit(node0.Get<Mle::Mle>().IsLeader());
+
+    for (uint8_t i = 0; i < 20; i++)
+    {
+        nodes[i] = &nexus.CreateNode();
+        SuccessOrQuit(nodes[i]->Get<Mac::Mac>().SetPanChannel(node0.Get<Mac::Mac>().GetPanChannel()));
+        nodes[i]->Get<Mac::Mac>().SetPanId(node0.Get<Mac::Mac>().GetPanId());
+        nodes[i]->Get<ThreadNetif>().Up();
+    }
+
+    VerifyOrQuit(node0.Get<Manager>().IsEnabled());
+    VerifyOrQuit(node0.Get<Manager>().IsRunning());
+
+    SuccessOrQuit(node0.Get<Ip6::Filter>().AddUnsecurePort(node0.Get<Manager>().GetUdpPort()));
+
+    sockAddr.SetAddress(node0.Get<Mle::Mle>().GetLinkLocalAddress());
+    sockAddr.SetPort(node0.Get<Manager>().GetUdpPort());
+    node0.Get<KeyManager>().GetPskc(pskc);
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    Log("Establish 16 concurrent secure sessions (the limit)");
+
+    for (uint8_t i = 0; i < 16; i++)
+    {
+        SuccessOrQuit(nodes[i]->Get<Tmf::SecureAgent>().SetPsk(pskc.m8, Pskc::kSize));
+        SuccessOrQuit(nodes[i]->Get<Tmf::SecureAgent>().Open(0));
+        SuccessOrQuit(nodes[i]->Get<Tmf::SecureAgent>().Connect(sockAddr));
+    }
+
+    nexus.AdvanceTime(2 * Time::kOneSecondInMsec);
+
+    for (uint8_t i = 0; i < 16; i++)
+    {
+        VerifyOrQuit(nodes[i]->Get<Tmf::SecureAgent>().IsConnected());
+    }
+
+    VerifyOrQuit(node0.Get<Manager>().GetCounters().mPskcSecureSessionSuccesses == 16);
+
+    // Verify exactly 16 sessions are connected
+    sessionCount = 0;
+    iter.Init(node0.GetInstance());
+    while (iter.GetNextSessionInfo(sessionInfo) == kErrorNone)
+    {
+        VerifyOrQuit(sessionInfo.mIsConnected);
+        sessionCount++;
+    }
+    VerifyOrQuit(sessionCount == 16);
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    Log("Try to establish a 17th secure session, should be rejected");
+
+    SuccessOrQuit(nodes[16]->Get<Tmf::SecureAgent>().SetPsk(pskc.m8, Pskc::kSize));
+    SuccessOrQuit(nodes[16]->Get<Tmf::SecureAgent>().Open(0));
+    SuccessOrQuit(nodes[16]->Get<Tmf::SecureAgent>().Connect(sockAddr));
+
+    nexus.AdvanceTime(2 * Time::kOneSecondInMsec);
+
+    VerifyOrQuit(!nodes[16]->Get<Tmf::SecureAgent>().IsConnected());
+    VerifyOrQuit(node0.Get<Manager>().GetCounters().mPskcSecureSessionSuccesses == 16);
+
+    // Verify count remains 16
+    sessionCount = 0;
+    iter.Init(node0.GetInstance());
+    while (iter.GetNextSessionInfo(sessionInfo) == kErrorNone)
+    {
+        sessionCount++;
+    }
+    VerifyOrQuit(sessionCount == 16);
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    Log("Close all sessions to clean up");
+
+    for (uint8_t i = 0; i < 17; i++)
+    {
+        nodes[i]->Get<Tmf::SecureAgent>().Close();
+    }
+
+    nexus.AdvanceTime(5 * Time::kOneSecondInMsec);
+
+    iter.Init(node0.GetInstance());
+    VerifyOrQuit(iter.GetNextSessionInfo(sessionInfo) == kErrorNotFound);
+
+    // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+    Log("Verify Handshake Timeout: start a session but block the client right after first packet");
+
+    SuccessOrQuit(nodes[0]->Get<Tmf::SecureAgent>().SetPsk(pskc.m8, Pskc::kSize));
+    SuccessOrQuit(nodes[0]->Get<Tmf::SecureAgent>().Open(0));
+    SuccessOrQuit(nodes[0]->Get<Tmf::SecureAgent>().Connect(sockAddr));
+
+    // Drop client's interface immediately so it never receives HelloVerifyRequest
+    nodes[0]->Get<ThreadNetif>().Down();
+
+    // Wait for 14 seconds (handshake timeout is 15 seconds)
+    nexus.AdvanceTime(14 * Time::kOneSecondInMsec);
+
+    // The session should still be in connecting state on node0
+    iter.Init(node0.GetInstance());
+    SuccessOrQuit(iter.GetNextSessionInfo(sessionInfo));
+    VerifyOrQuit(!sessionInfo.mIsConnected);
+    VerifyOrQuit(iter.GetNextSessionInfo(sessionInfo) == kErrorNotFound);
+
+    // Wait for additional 4 seconds (total 18 seconds, past the 15-second timeout + 2-second guard time)
+    nexus.AdvanceTime(4 * Time::kOneSecondInMsec);
+
+    // The session should have timed out and been removed
+    iter.Init(node0.GetInstance());
+    VerifyOrQuit(iter.GetNextSessionInfo(sessionInfo) == kErrorNotFound);
+
+    Log("TestBorderAgentSessionsLimit passed successfully!");
+}
+
 } // namespace Nexus
 } // namespace ot
 
@@ -2578,6 +2798,7 @@ int main(void)
     ot::Nexus::TestBorderAgentTxtDataCallback();
     ot::Nexus::TestBorderAgentServiceRegistration();
     ot::Nexus::TestBorderAgentServiceRegistrationRename();
+    ot::Nexus::TestBorderAgentSessionsLimit();
     printf("All tests passed\n");
     return 0;
 }

@@ -42,7 +42,7 @@ RegisterLogModule("MsgFramer");
 MessageFramer::MessageFramer(Instance &aInstance)
     : InstanceLocator(aInstance)
 {
-    mFragTag = Random::NonCrypto::GetUint16();
+    mFragTag = Random::NonCrypto::Generate<uint16_t>();
 }
 
 void MessageFramer::DetermineMacSourceAddress(const Ip6::Address &aIp6Addr, Mac::Addresses &aMacAddrs) const
@@ -55,11 +55,21 @@ void MessageFramer::DetermineMacSourceAddress(const Ip6::Address &aIp6Addr, Mac:
     }
 }
 
-void MessageFramer::PrepareMacHeaders(Mac::TxFrame &aTxFrame, Mac::TxFrame::Info &aTxFrameInfo, const Message *aMessage)
+void MessageFramer::PrepareMacHeaders(Mac::TxFrame &aTxFrame, Mac::TxFrame::BuildInfo &aBuildInfo)
+{
+    Mac::TxFrame::PayloadBuilder builder;
+
+    PrepareMacHeaders(aTxFrame, aBuildInfo, builder, nullptr);
+}
+
+void MessageFramer::PrepareMacHeaders(Mac::TxFrame                 &aTxFrame,
+                                      Mac::TxFrame::BuildInfo      &aBuildInfo,
+                                      Mac::TxFrame::PayloadBuilder &aPayloadBuilder,
+                                      const Message                *aMessage)
 {
     const Neighbor *neighbor;
 
-    aTxFrameInfo.mVersion = Mac::Frame::kVersion2006;
+    aBuildInfo.mVersion = Mac::Frame::kVersion2006;
 
 #if OPENTHREAD_CONFIG_MAC_HEADER_IE_SUPPORT
 
@@ -69,7 +79,7 @@ void MessageFramer::PrepareMacHeaders(Mac::TxFrame &aTxFrame, Mac::TxFrame::Info
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
     // Determine frame version and Header IE entries
 
-    neighbor = Get<NeighborTable>().FindNeighbor(aTxFrameInfo.mAddrs.mDestination);
+    neighbor = Get<NeighborTable>().FindNeighbor(aBuildInfo.mAddrs.mDestination);
 
     if (neighbor == nullptr)
     {
@@ -77,20 +87,20 @@ void MessageFramer::PrepareMacHeaders(Mac::TxFrame &aTxFrame, Mac::TxFrame::Info
 #if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
     else if (Get<Mac::Mac>().IsCslEnabled())
     {
-        aTxFrameInfo.mAppendCslIe = true;
-        aTxFrameInfo.mVersion     = Mac::Frame::kVersion2015;
+        aBuildInfo.mAppendCslIe = true;
+        aBuildInfo.mVersion     = Mac::Frame::kVersion2015;
     }
 #endif
 #if OPENTHREAD_FTD && OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE
     else if ((Get<ChildTable>().Contains(*neighbor) && static_cast<const Child *>(neighbor)->IsCslSynchronized()))
     {
-        aTxFrameInfo.mVersion = Mac::Frame::kVersion2015;
+        aBuildInfo.mVersion = Mac::Frame::kVersion2015;
     }
 #endif
 #if OPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE
     else if (neighbor->IsEnhAckProbingActive())
     {
-        aTxFrameInfo.mVersion = Mac::Frame::kVersion2015;
+        aBuildInfo.mVersion = Mac::Frame::kVersion2015;
     }
 #endif
 
@@ -100,19 +110,19 @@ void MessageFramer::PrepareMacHeaders(Mac::TxFrame &aTxFrame, Mac::TxFrame::Info
 #if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
     if ((aMessage != nullptr) && aMessage->IsTimeSync())
     {
-        aTxFrameInfo.mAppendTimeIe = true;
-        aTxFrameInfo.mVersion      = Mac::Frame::kVersion2015;
+        aBuildInfo.mAppendTimeIe = true;
+        aBuildInfo.mVersion      = Mac::Frame::kVersion2015;
     }
 #endif
 
-    aTxFrameInfo.mEmptyPayload = (aMessage == nullptr) || (aMessage->GetLength() == 0);
+    aBuildInfo.mEmptyPayload = (aMessage == nullptr) || (aMessage->GetLength() == 0);
 
 #endif // OPENTHREAD_CONFIG_MAC_HEADER_IE_SUPPORT
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-    // Prepare MAC headers
+    // Prepare MAC headers and init `aPayloadBuilder`.
 
-    aTxFrameInfo.PrepareHeadersIn(aTxFrame);
+    aTxFrame.PrepareHeaders(aBuildInfo, aPayloadBuilder);
 
     OT_UNUSED_VARIABLE(aMessage);
     OT_UNUSED_VARIABLE(neighbor);
@@ -120,19 +130,19 @@ void MessageFramer::PrepareMacHeaders(Mac::TxFrame &aTxFrame, Mac::TxFrame::Info
 
 void MessageFramer::PrepareEmptyFrame(Mac::TxFrame &aFrame, const Mac::Address &aMacDest, bool aAckRequest)
 {
-    Mac::TxFrame::Info frameInfo;
+    Mac::TxFrame::BuildInfo buildInfo;
 #if OPENTHREAD_FTD
     Neighbor          *neighbor;
 #endif
 
-    frameInfo.mAddrs.mSource.SetShort(Get<Mac::Mac>().GetShortAddress());
+    buildInfo.mAddrs.mSource.SetShort(Get<Mac::Mac>().GetShortAddress());
 
-    if (frameInfo.mAddrs.mSource.IsShortAddrInvalid() || aMacDest.IsExtended())
+    if (buildInfo.mAddrs.mSource.IsShortAddrInvalid() || aMacDest.IsExtended())
     {
-        frameInfo.mAddrs.mSource.SetExtended(Get<Mac::Mac>().GetExtAddress());
+        buildInfo.mAddrs.mSource.SetExtended(Get<Mac::Mac>().GetExtAddress());
     }
 
-    frameInfo.mAddrs.mDestination = aMacDest;
+    buildInfo.mAddrs.mDestination = aMacDest;
 
 #if OPENTHREAD_FTD
     neighbor = Get<NeighborTable>().FindNeighbor(aMacDest);
@@ -141,22 +151,21 @@ void MessageFramer::PrepareEmptyFrame(Mac::TxFrame &aFrame, const Mac::Address &
     {
         const Child *child = static_cast<const Child *>(neighbor);
 
-        frameInfo.mPanIds.SetBothSourceDestination(child->GetPanId());
+        buildInfo.mPanIds.SetBothSourceDestination(child->GetPanId());
     }
     else
 #endif
     {
-        frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+        buildInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
     }
 
-    frameInfo.mType          = Mac::Frame::kTypeData;
-    frameInfo.mSecurityLevel = Mac::Frame::kSecurityEncMic32;
-    frameInfo.mKeyIdMode     = Mac::Frame::kKeyIdMode1;
+    buildInfo.mType          = Mac::Frame::kTypeData;
+    buildInfo.mSecurityLevel = Mac::Frame::kSecurityEncMic32;
+    buildInfo.mKeyIdMode     = Mac::Frame::kKeyIdMode1;
 
-    PrepareMacHeaders(aFrame, frameInfo, nullptr);
+    PrepareMacHeaders(aFrame, buildInfo);
 
     aFrame.SetAckRequest(aAckRequest);
-    aFrame.SetPayloadLength(0);
 }
 
 uint16_t MessageFramer::PrepareFrame(Mac::TxFrame         &aFrame,
@@ -167,30 +176,30 @@ uint16_t MessageFramer::PrepareFrame(Mac::TxFrame         &aFrame,
                                      uint16_t              aMeshDest,
                                      bool                  aAddFragHeader)
 {
-    Mac::TxFrame::Info frameInfo;
-    uint16_t           payloadLength;
-    uint16_t           origMsgOffset;
-    uint16_t           nextOffset;
-    FrameBuilder       frameBuilder;
+    Mac::TxFrame::BuildInfo      buildInfo;
+    Mac::TxFrame::PayloadBuilder frameBuilder;
+    uint16_t                     payloadLength;
+    uint16_t                     origMsgOffset;
+    uint16_t                     nextOffset;
 
 start:
-    frameInfo.Clear();
+    buildInfo.Clear();
 
     if (aMessage.IsLinkSecurityEnabled())
     {
-        frameInfo.mSecurityLevel = Mac::Frame::kSecurityEncMic32;
+        buildInfo.mSecurityLevel = Mac::Frame::kSecurityEncMic32;
 
         if (aMessage.GetSubType() == Message::kSubTypeJoinerEntrust)
         {
-            frameInfo.mKeyIdMode = Mac::Frame::kKeyIdMode0;
+            buildInfo.mKeyIdMode = Mac::Frame::kKeyIdMode0;
         }
         else if (aMessage.IsMleCommand(Mle::kCommandAnnounce))
         {
-            frameInfo.mKeyIdMode = Mac::Frame::kKeyIdMode2;
+            buildInfo.mKeyIdMode = Mac::Frame::kKeyIdMode2;
         }
         else
         {
-            frameInfo.mKeyIdMode = Mac::Frame::kKeyIdMode1;
+            buildInfo.mKeyIdMode = Mac::Frame::kKeyIdMode1;
         }
     }
 #if OPENTHREAD_FTD
@@ -204,11 +213,11 @@ start:
         if (Get<ChildTable>().Contains(*neighbor))
         {
             const Child *child = static_cast<const Child *>(neighbor);
-            frameInfo.mPanIds.SetBothSourceDestination(child->GetPanId());  // Use child's PAN ID
+            buildInfo.mPanIds.SetBothSourceDestination(child->GetPanId());  // Use child's PAN ID
         }
         else
         {
-            frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+            buildInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
         }
     }
     else
@@ -222,7 +231,7 @@ start:
                 // Pre-configured device: PAN ID was captured from its incoming frame
                 // (e.g., Parent Request arrived with dst PAN = device's assigned PAN).
                 // Use it and consume it so the same value is not reused for another peer.
-                frameInfo.mPanIds.SetBothSourceDestination(mac.GetTemporaryPanId());
+                buildInfo.mPanIds.SetBothSourceDestination(mac.GetTemporaryPanId());
                 mac.SetTemporaryPanIdValid(false);
             }
             else
@@ -230,16 +239,16 @@ start:
                 // No PAN context from a received frame — this is a new commissioning joiner.
                 // Allocate a PAN ID from the pool for it.
                 uint16_t panId = Get<MeshCoP::JoinerRouter>().GetOrAllocateNextPanId();
-                frameInfo.mPanIds.SetBothSourceDestination(panId);
+                buildInfo.mPanIds.SetBothSourceDestination(panId);
             }
         }
         else
         {
-            frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+            buildInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
         }
     }
 #else
-    frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+    buildInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
 #endif
 
     if (aMessage.IsSubTypeMle())
@@ -249,19 +258,19 @@ start:
         case Mle::kCommandAnnounce:
             aFrame.SetChannel(aMessage.GetChannel());
             aFrame.SetRxChannelAfterTxDone(Get<Mac::Mac>().GetPanChannel());
-            frameInfo.mPanIds.SetDestination(Mac::kPanIdBroadcast);
+            buildInfo.mPanIds.SetDestination(Mac::kPanIdBroadcast);
             break;
 
         case Mle::kCommandDiscoveryRequest:
-            frameInfo.mPanIds.SetDestination(aMessage.GetPanId());
+            buildInfo.mPanIds.SetDestination(aMessage.GetPanId());
             break;
 
         case Mle::kCommandDiscoveryResponse:
-            frameInfo.mPanIds.SetDestination(aMessage.GetPanId());
+            buildInfo.mPanIds.SetDestination(aMessage.GetPanId());
 #if OPENTHREAD_FTD
-            frameInfo.mPanIds.SetSource(Get<MeshCoP::JoinerRouter>().GetOrAllocateNextPanId());
+            buildInfo.mPanIds.SetSource(Get<MeshCoP::JoinerRouter>().GetOrAllocateNextPanId());
 #else
-            frameInfo.mPanIds.SetSource(Get<Mac::Mac>().GetPanId());
+            buildInfo.mPanIds.SetSource(Get<Mac::Mac>().GetPanId());
 #endif
             break;
 
@@ -270,12 +279,10 @@ start:
         }
     }
 
-    frameInfo.mType  = Mac::Frame::kTypeData;
-    frameInfo.mAddrs = aMacAddrs;
+    buildInfo.mType  = Mac::Frame::kTypeData;
+    buildInfo.mAddrs = aMacAddrs;
 
-    PrepareMacHeaders(aFrame, frameInfo, &aMessage);
-
-    frameBuilder.Init(aFrame.GetPayload(), aFrame.GetMaxPayloadLength());
+    PrepareMacHeaders(aFrame, buildInfo, frameBuilder, &aMessage);
 
 #if OPENTHREAD_FTD
 
@@ -300,10 +307,10 @@ start:
         // then adding the fixed `kMeshHeaderFrameFcsSize` instead
         // (updating the FCS size in the calculation of footer length).
 
-        maxPayloadLength = kMeshHeaderFrameMtu - aFrame.GetHeaderLength() -
-                           (aFrame.GetFooterLength() - aFrame.GetFcsSize() + kMeshHeaderFrameFcsSize);
+        maxPayloadLength = kMeshHeaderFrameMtu - frameBuilder.GetHeaderLength() -
+                           (frameBuilder.GetFooterLength() - aFrame.GetFcsSize() + kMeshHeaderFrameFcsSize);
 
-        frameBuilder.Init(aFrame.GetPayload(), maxPayloadLength);
+        frameBuilder.SetMaxLength(Min(maxPayloadLength, frameBuilder.GetMaxLength()));
 
         meshHeader.Init(aMeshSource, aMeshDest, kMeshHeaderHopsLeft);
 
@@ -401,8 +408,9 @@ start:
     }
 
     // Copy IPv6 Payload
-    SuccessOrExit(frameBuilder.AppendBytesFromMessage(aMessage, aMessage.GetOffset(), payloadLength));
-    aFrame.SetPayloadLength(frameBuilder.GetLength());
+    SuccessOrAssert(frameBuilder.AppendBytesFromMessage(aMessage, aMessage.GetOffset(), payloadLength));
+
+    aFrame.FinishPayload(frameBuilder);
 
     nextOffset = aMessage.GetOffset() + payloadLength;
 
@@ -415,8 +423,7 @@ start:
     }
 
     aMessage.SetOffset(origMsgOffset);
-    
-exit:
+
     return nextOffset;
 }
 
@@ -424,20 +431,19 @@ exit:
 
 uint16_t MessageFramer::PrepareMeshFrame(Mac::TxFrame &aFrame, Message &aMessage, const Mac::Addresses &aMacAddrs)
 {
-    Mac::TxFrame::Info frameInfo;
+    Mac::TxFrame::BuildInfo      buildInfo;
+    Mac::TxFrame::PayloadBuilder frameBuilder;
 
-    frameInfo.mType          = Mac::Frame::kTypeData;
-    frameInfo.mAddrs         = aMacAddrs;
-    frameInfo.mSecurityLevel = Mac::Frame::kSecurityEncMic32;
-    frameInfo.mKeyIdMode     = Mac::Frame::kKeyIdMode1;
-    frameInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+    buildInfo.mType          = Mac::Frame::kTypeData;
+    buildInfo.mAddrs         = aMacAddrs;
+    buildInfo.mSecurityLevel = Mac::Frame::kSecurityEncMic32;
+    buildInfo.mKeyIdMode     = Mac::Frame::kKeyIdMode1;
+    buildInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
 
-    PrepareMacHeaders(aFrame, frameInfo, &aMessage);
+    PrepareMacHeaders(aFrame, buildInfo, frameBuilder, &aMessage);
 
-    // write payload
-    OT_ASSERT(aMessage.GetLength() <= aFrame.GetMaxPayloadLength());
-    aMessage.ReadBytes(0, aFrame.GetPayload(), aMessage.GetLength());
-    aFrame.SetPayloadLength(aMessage.GetLength());
+    SuccessOrAssert(frameBuilder.AppendBytesFromMessage(aMessage, 0, aMessage.GetLength()));
+    aFrame.FinishPayload(frameBuilder);
 
     return aMessage.GetLength();
 }

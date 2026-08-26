@@ -39,7 +39,7 @@
 
 using namespace ot;
 
-#if OPENTHREAD_CONFIG_WAKEUP_COORDINATOR_ENABLE
+#if OPENTHREAD_CONFIG_TD_WAKE_INITIATOR_ENABLE
 otError otP2pWakeupAndLink(otInstance           *aInstance,
                            const otP2pRequest   *aP2pRequest,
                            otP2pLinkDoneCallback aCallback,

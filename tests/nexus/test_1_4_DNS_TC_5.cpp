@@ -266,8 +266,7 @@ void Test_1_4_DNS_TC_5(const char *aJsonFileName)
     sEth1Node = &eth1;
     eth1.mInfraIf.SetUdpHook(HandleUdpHook);
 
-    br1.AllowList(ed1);
-    ed1.AllowList(br1);
+    AllowLinkBetween(br1, ed1);
 
     SuccessOrQuit(eth1Addr.FromString(kEth1Addr));
     SuccessOrQuit(br1AilAddr.FromString(kBr1AilAddr));
@@ -288,7 +287,7 @@ void Test_1_4_DNS_TC_5(const char *aJsonFileName)
     br1.Form();
     nexus.AdvanceTime(kFormNetworkTime);
 
-    ed1.Join(br1);
+    ed1.Join(br1, Node::kAsFed);
     nexus.AdvanceTime(kJoinNetworkTime);
 
     br1.Get<BorderRouter::InfraIf>().Init(1, true);
@@ -345,7 +344,7 @@ void Test_1_4_DNS_TC_5(const char *aJsonFileName)
         SuccessOrQuit(eth1.Get<Dns::Multicast::Core>().SetEnabled(true, 1));
 
         SuccessOrQuit(ip4Addr.FromString("192.168.217.100"));
-        eth1Ip4Addr.SetToIp4Mapped(ip4Addr);
+        eth1Ip4Addr.InitAsIp4Mapped(ip4Addr);
         eth1.mInfraIf.AddAddress(eth1Ip4Addr);
         eth1.mMdns.SignalIfAddresses(eth1.GetInstance());
 

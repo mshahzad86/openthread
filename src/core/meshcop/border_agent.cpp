@@ -35,6 +35,7 @@
 
 #if OPENTHREAD_CONFIG_BORDER_AGENT_ENABLE
 
+#include "common/num_utils.hpp"
 #include "instance/instance.hpp"
 #include "meshcop/border_agent_txt_data.hpp"
 
@@ -257,7 +258,18 @@ SecureSession *Manager::HandleAcceptSession(void *aContext, const Ip6::MessageIn
 
 Manager::CoapDtlsSession *Manager::HandleAcceptSession(void)
 {
-    return CoapDtlsSession::Allocate(GetInstance(), mDtlsTransport);
+    CoapDtlsSession *session = nullptr;
+
+    if (mDtlsTransport.GetSessions().CountAllEntries() >= kMaxSessions)
+    {
+        LogWarn("Accept session failed: reached max concurrent secure sessions limit (%lu)", ToUlong(kMaxSessions));
+        ExitNow();
+    }
+
+    session = CoapDtlsSession::Allocate(GetInstance(), mDtlsTransport);
+
+exit:
+    return session;
 }
 
 void Manager::HandleRemoveSession(void *aContext, SecureSession &aSession)
@@ -319,7 +331,7 @@ void Manager::HandleCommissionerPetitionAccepted(CoapDtlsSession &aSession, uint
 
     mCommissionerSession = &aSession;
 
-    Get<Mle::Mle>().GetCommissionerAloc(aSessionId, mCommissionerAloc.GetAddress());
+    Get<Mle::Mle>().ComposeCommissionerAloc(aSessionId, mCommissionerAloc.GetAddress());
     Get<ThreadNetif>().AddUnicastAddress(mCommissionerAloc);
 
     IgnoreError(Get<Ip6::Udp>().AddReceiver(mCommissionerUdpReceiver));
@@ -579,7 +591,8 @@ Manager::CoapDtlsSession::CoapDtlsSession(Instance &aInstance, Dtls::Transport &
     SetResourceHandler(&HandleResource);
     SetConnectCallback(&HandleConnected, this);
 
-    LogInfo("Allocating session %u", mIndex);
+    LogInfo("Allocating session %u - starting handshake timer for %lu ms", mIndex, ToUlong(kHandshakeTimeout));
+    mTimer.Start(kHandshakeTimeout);
 }
 
 Error Manager::CoapDtlsSession::SendMessage(OwnedPtr<Coap::Message> aMessage)
@@ -890,7 +903,6 @@ Error Manager::CoapDtlsSession::ForwardUdpProxy(const Message &aMessage, const I
 {
     Error                     error = kErrorNone;
     OwnedPtr<Coap::Message>   message;
-    ExtendedTlv               extTlv;
     UdpEncapsulationTlvHeader udpEncapHeader;
     OffsetRange               offsetRange;
 
@@ -901,13 +913,11 @@ Error Manager::CoapDtlsSession::ForwardUdpProxy(const Message &aMessage, const I
 
     offsetRange.InitFromMessageOffsetToEnd(aMessage);
 
-    extTlv.SetType(Tlv::kUdpEncapsulation);
-    extTlv.SetLength(sizeof(UdpEncapsulationTlvHeader) + offsetRange.GetLength());
-
     udpEncapHeader.SetSourcePort(aMessageInfo.GetPeerPort());
     udpEncapHeader.SetDestinationPort(aMessageInfo.GetSockPort());
 
-    SuccessOrExit(error = message->Append(extTlv));
+    SuccessOrExit(error = Tlv::AppendTlvHeader(*message, Tlv::kUdpEncapsulation,
+                                               sizeof(UdpEncapsulationTlvHeader) + offsetRange.GetLength()));
     SuccessOrExit(error = message->Append(udpEncapHeader));
     SuccessOrExit(error = message->AppendBytesFromMessage(aMessage, offsetRange));
 
@@ -1003,8 +1013,7 @@ void Manager::CoapDtlsSession::HandleTmfProxyTx(Coap::Msg &aMsg)
 
     SuccessOrExit(error = Tlv::FindTlvValueOffsetRange(aMsg.mMessage, Tlv::kUdpEncapsulation, offsetRange));
 
-    SuccessOrExit(error = aMsg.mMessage.Read(offsetRange, udpEncapHeader));
-    offsetRange.AdvanceOffset(sizeof(UdpEncapsulationTlvHeader));
+    SuccessOrExit(error = aMsg.mMessage.ReadAndAdvance(offsetRange, udpEncapHeader));
 
     VerifyOrExit(udpEncapHeader.GetSourcePort() > 0 && udpEncapHeader.GetDestinationPort() > 0, error = kErrorDrop);
 
@@ -1149,8 +1158,13 @@ void Manager::CoapDtlsSession::HandleTimer(void)
         ResignEnroller();
 #endif
         LogInfo("Session %u timed out - disconnecting", mIndex);
-        DisconnectTimeout();
     }
+    else
+    {
+        LogInfo("Session %u handshake timeout - disconnecting", mIndex);
+    }
+
+    DisconnectTimeout();
 }
 
 void Manager::CoapDtlsSession::CopyInfoTo(SessionInfo &aInfo, UptimeMsec aUptimeNow) const

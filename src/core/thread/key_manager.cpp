@@ -176,6 +176,7 @@ KeyManager::KeyManager(Instance &aInstance)
     , mKeyRotationTimer(aInstance)
     , mKekFrameCounter(0)
     , mIsPskcSet(false)
+    , mIsKekSet(false)
 {
     otPlatCryptoInit();
 
@@ -435,6 +436,16 @@ void KeyManager::UpdateKeyMaterial(void)
         mPanIdKeyMaterials[i].curMacKey = curMacKey;
         mPanIdKeyMaterials[i].prevMacKey = prevMacKey;
         mPanIdKeyMaterials[i].nextMacKey = nextMacKey;
+
+        // Non-negotiable per merge-conflicts-resolution.md §2: feed the router's own PAN into
+        // upstream's SetMode1MacKeys() so mKeyTrio (and its GetMacKey()/SelectKey() consumers) is
+        // live from this commit forward, even though the rest of the KeyTrio unification is
+        // deferred to the refactor-plan's later commits.
+        if (panId == Get<Mac::Mac>().GetPanId())
+        {
+            Get<Mac::SubMac>().SetMode1MacKeys(Mac::DetermineKeyIndexFor(mKeySequence), prev->GetMacKey(),
+                                               cur.GetMacKey(), next->GetMacKey());
+        }
 #endif
 #if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
     {
@@ -521,18 +532,6 @@ const Mle::KeyMaterial &KeyManager::GetTemporaryMleKey(uint32_t aKeySequence)
     return mTemporaryMleKey;
 }
 
-#if OPENTHREAD_CONFIG_WAKEUP_END_DEVICE_ENABLE
-const Mle::KeyMaterial &KeyManager::GetTemporaryMacKey(uint32_t aKeySequence)
-{
-    HashKeys hashKeys;
-
-    ComputeKeys(aKeySequence, hashKeys);
-    mTemporaryMacKey.SetFrom(hashKeys.GetMacKey());
-
-    return mTemporaryMacKey;
-}
-#endif
-
 #if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
 const Mac::KeyMaterial &KeyManager::GetTemporaryTrelMacKey(uint32_t aKeySequence)
 {
@@ -605,6 +604,13 @@ void KeyManager::SetKek(const Kek &aKek)
 {
     mKek.SetFrom(aKek, /* aIsExportable */ true);
     mKekFrameCounter = 0;
+    mIsKekSet        = true;
+}
+
+void KeyManager::ClearKek(void)
+{
+    mKek.Clear();
+    mIsKekSet = false;
 }
 
 void KeyManager::SetSecurityPolicy(const SecurityPolicy &aSecurityPolicy)
@@ -788,6 +794,7 @@ void KeyManager::DestroyTemporaryKeys(void)
 {
     mMleKey.Clear();
     mKek.Clear();
+    mIsKekSet = false;
     Get<Mac::SubMac>().ClearMacKeys();
 }
 

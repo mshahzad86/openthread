@@ -735,7 +735,7 @@ void Commissioner::HandleLeaderPetitionResponse(Coap::Msg *aMsg, Error aResult)
         ExitNow();
     }
 
-    Get<Mle::Mle>().GetCommissionerAloc(mSessionId, mCommissionerAloc.GetAddress());
+    Get<Mle::Mle>().ComposeCommissionerAloc(mSessionId, mCommissionerAloc.GetAddress());
     Get<ThreadNetif>().AddUnicastAddress(mCommissionerAloc);
 
     SetState(kStateActive);
@@ -858,8 +858,7 @@ template <> void Commissioner::HandleTmf<kUriRelayRx>(Coap::Msg &aMsg)
     aMsg.mMessage.SetOffset(offsetRange.GetOffset());
     SuccessOrExit(error = aMsg.mMessage.SetLength(offsetRange.GetEndOffset()));
 
-    joinerMessageInfo.SetPeerAddr(Get<Mle::Mle>().GetMeshLocalEid());
-    joinerMessageInfo.GetPeerAddr().SetIid(mJoinerIid);
+    Get<Mle::Mle>().ComposeMeshLocalAddress(mJoinerIid, joinerMessageInfo.GetPeerAddr());
     joinerMessageInfo.SetPeerPort(mJoinerPort);
 
     Get<Tmf::SecureAgent>().HandleReceive(aMsg.mMessage, joinerMessageInfo);
@@ -912,6 +911,15 @@ template <> void Commissioner::HandleTmf<kUriJoinerFinalize>(Coap::Msg &aMsg)
         break;
 
     case kErrorNotFound:
+        // Fail closed: when the commissioner has a provisioning URL
+        // configured, a `JOIN_FIN.req` that omits the Provisioning URL TLV
+        // must be rejected as well; otherwise the URL check is joiner-opt-in
+        // and omitting the TLV skips it. Joiners that predate the TLV can
+        // still join commissioners with no provisioning URL configured.
+        if (mProvisioningUrl[0] != kNullChar)
+        {
+            state = StateTlv::kReject;
+        }
         break;
 
     default:
@@ -971,7 +979,7 @@ Error Commissioner::SendRelayTransmit(Message &aMessage, const Ip6::MessageInfo 
     OT_UNUSED_VARIABLE(aMessageInfo);
 
     Error                   error = kErrorNone;
-    ExtendedTlv             tlv;
+    OffsetRange             offsetRange;
     OwnedPtr<Coap::Message> message;
     Kek                     kek;
 
@@ -989,10 +997,9 @@ Error Commissioner::SendRelayTransmit(Message &aMessage, const Ip6::MessageInfo 
         SuccessOrExit(error = Tlv::Append<JoinerRouterKekTlv>(*message, kek));
     }
 
-    tlv.SetType(Tlv::kJoinerDtlsEncapsulation);
-    tlv.SetLength(aMessage.GetLength());
-    SuccessOrExit(error = message->Append(tlv));
-    SuccessOrExit(error = message->AppendBytesFromMessage(aMessage, 0, aMessage.GetLength()));
+    offsetRange.InitFromMessageFullLength(aMessage);
+    SuccessOrExit(
+        error = Tlv::AppendTlvWithValueFromMessage(*message, Tlv::kJoinerDtlsEncapsulation, aMessage, offsetRange));
 
     SuccessOrExit(error = Get<Tmf::Agent>().SendMessageToRloc(*message, mJoinerRloc));
     message.Release();

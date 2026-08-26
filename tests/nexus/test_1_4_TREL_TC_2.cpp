@@ -106,24 +106,19 @@ void Test_1_4_TREL_TC_2(void)
     Log("Step 1: Form the topology");
 
     // Leader <-> Router_1 (DUT)
-    leader.AllowList(router1);
-    router1.AllowList(leader);
+    AllowLinkBetween(leader, router1);
 
     // Leader <-> Router_2
-    leader.AllowList(router2);
-    router2.AllowList(leader);
+    AllowLinkBetween(leader, router2);
 
     // Router_1 (DUT) <-> Router_3
-    router1.AllowList(router3);
-    router3.AllowList(router1);
+    AllowLinkBetween(router1, router3);
 
     // Router_1 (DUT) <-> Router_4
-    router1.AllowList(router4);
-    router4.AllowList(router1);
+    AllowLinkBetween(router1, router4);
 
     // Router_1 (DUT) <-> ED_1
-    router1.AllowList(ed1);
-    ed1.AllowList(router1);
+    AllowLinkBetween(router1, ed1);
 
     // Enable TREL (mDNS) on all TREL nodes.
     SuccessOrQuit(router1.Get<Dns::Multicast::Core>().SetEnabled(true, kInfraIfIndex));
@@ -156,12 +151,12 @@ void Test_1_4_TREL_TC_2(void)
     {
         const Neighbor *neighbor = leader.Get<NeighborTable>().FindNeighbor(router1.Get<Mac::Mac>().GetExtAddress());
         VerifyOrQuit(neighbor != nullptr);
-        VerifyOrQuit(neighbor->GetSupportedRadioTypes().Contains(Mac::kRadioTypeTrel));
+        VerifyOrQuit(neighbor->GetSupportedRadioTypes().Contains(ot::Radio::kTypeTrel));
     }
     {
         const Neighbor *neighbor = router1.Get<NeighborTable>().FindNeighbor(router4.Get<Mac::Mac>().GetExtAddress());
         VerifyOrQuit(neighbor != nullptr);
-        VerifyOrQuit(neighbor->GetSupportedRadioTypes().Contains(Mac::kRadioTypeTrel));
+        VerifyOrQuit(neighbor->GetSupportedRadioTypes().Contains(ot::Radio::kTypeTrel));
     }
     VerifyOrQuit(leader.Get<NeighborTable>().FindNeighbor(router2.Get<Mac::Mac>().GetExtAddress()) != nullptr);
     VerifyOrQuit(router2.Get<NeighborTable>().FindNeighbor(leader.Get<Mac::Mac>().GetExtAddress()) != nullptr);

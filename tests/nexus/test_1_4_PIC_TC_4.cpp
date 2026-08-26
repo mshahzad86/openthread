@@ -120,13 +120,13 @@ static void HandleIp4Receive(otMessage *aMessage, void *aContext)
     if (ip4Headers.IsIcmp4())
     {
         Log("Received ICMPv4 packet");
-        Ip4::Icmp::Header icmpHeader;
+        Ip4::Icmp4Header icmpHeader;
         SuccessOrQuit(message->Read(sizeof(Ip4::Header), icmpHeader));
 
-        if (icmpHeader.GetType() == Ip4::Icmp::Header::kTypeEchoRequest)
+        if (icmpHeader.GetType() == Ip4::Icmp4Header::kTypeEchoRequest)
         {
             Log("Received ICMPv4 Echo Request, sending reply");
-            uint16_t payloadLen = message->GetLength() - sizeof(Ip4::Header) - sizeof(Ip4::Icmp::Header);
+            uint16_t payloadLen = message->GetLength() - sizeof(Ip4::Header) - sizeof(Ip4::Icmp4Header);
 
             OwnedPtr<Message> replyMessage;
             replyMessage.Reset(br1->Get<MessagePool>().Allocate(Message::kTypeIp4));
@@ -135,22 +135,22 @@ static void HandleIp4Receive(otMessage *aMessage, void *aContext)
             Ip4::Header ip4Header;
             ip4Header.Clear();
             ip4Header.SetVersionIhl(0x45);
-            ip4Header.SetTotalLength(sizeof(Ip4::Header) + sizeof(Ip4::Icmp::Header) + payloadLen);
+            ip4Header.SetTotalLength(sizeof(Ip4::Header) + sizeof(Ip4::Icmp4Header) + payloadLen);
             ip4Header.SetProtocol(Ip4::kProtoIcmp);
             ip4Header.SetTtl(64);
             ip4Header.SetSource(ip4Headers.GetDestinationAddress());
             ip4Header.SetDestination(ip4Headers.GetSourceAddress());
             SuccessOrQuit(replyMessage->Append(ip4Header));
 
-            Ip4::Icmp::Header replyIcmpHeader;
+            Ip4::Icmp4Header replyIcmpHeader;
             replyIcmpHeader.Clear();
-            replyIcmpHeader.SetType(Ip4::Icmp::Header::kTypeEchoReply);
+            replyIcmpHeader.SetType(Ip4::Icmp4Header::kTypeEchoReply);
             replyIcmpHeader.SetRestOfHeader(icmpHeader.GetRestOfHeader());
             SuccessOrQuit(replyMessage->Append(replyIcmpHeader));
 
             // Append the rest of the ICMP request (Id, Sequence, and Payload)
-            SuccessOrQuit(replyMessage->AppendBytesFromMessage(
-                *message, sizeof(Ip4::Header) + sizeof(Ip4::Icmp::Header), payloadLen));
+            SuccessOrQuit(replyMessage->AppendBytesFromMessage(*message, sizeof(Ip4::Header) + sizeof(Ip4::Icmp4Header),
+                                                               payloadLen));
 
             replyMessage->SetOffset(sizeof(Ip4::Header));
             Checksum::UpdateMessageChecksum(*replyMessage, ip4Header.GetSource(), ip4Header.GetDestination(),
@@ -236,10 +236,9 @@ void Test_1_4_PIC_TC_4(void)
      *   - Description (PIC-10.4): Enable
      *   - Pass Criteria: N/A
      */
-    br1.AllowList(r1);
-    r1.AllowList(br1);
-    r1.AllowList(ed1);
-    ed1.AllowList(r1);
+
+    AllowLinkBetween(br1, r1);
+    AllowLinkBetween(r1, ed1);
 
     br1.Form();
     nexus.AdvanceTime(kFormNetworkTime);
@@ -254,7 +253,7 @@ void Test_1_4_PIC_TC_4(void)
     r1.Join(br1);
     nexus.AdvanceTime(kJoinNetworkTime);
 
-    ed1.Join(r1);
+    ed1.Join(r1, Node::kAsFed);
     nexus.AdvanceTime(kJoinNetworkTime);
 
     Log("Step 4: BR_1 configures IPv4 address and NAT64 prefix");

@@ -111,7 +111,7 @@ void SendMlrRequest(Node &aSource, const Ip6::Address &aDestination, const void 
     Coap::Message *message = aSource.Get<Tmf::Agent>().AllocateAndInitPriorityConfirmablePostMessage(kUriMlr);
     VerifyOrQuit(message != nullptr);
 
-    SuccessOrQuit(Tlv::Append<Ip6AddressesTlv>(*message, static_cast<const uint8_t *>(aAddressesData), aDataLength));
+    SuccessOrQuit(Tlv::Append<Ip6AddressesTlv>(*message, aAddressesData, aDataLength));
 
     SuccessOrQuit(aSource.Get<Tmf::Agent>().SendMessageTo(*message, aDestination));
 }
@@ -149,6 +149,7 @@ void TestMatnTc21(void)
     Ip6::Address mae1;
     Ip6::Address mae2;
     Ip6::Address mae3;
+    Ip6::Prefix  onLinkPrefix;
 
     br1.SetName("BR_1");
     br2.SetName("BR_2");
@@ -176,12 +177,9 @@ void TestMatnTc21(void)
      */
     Log("Step 0: Topology formation – BR_1, BR_2, Router");
 
-    br1.AllowList(br2);
-    br1.AllowList(router);
-    br2.AllowList(br1);
-    br2.AllowList(router);
-    router.AllowList(br1);
-    router.AllowList(br2);
+    AllowLinkBetween(br1, br2);
+    AllowLinkBetween(br1, router);
+    AllowLinkBetween(br2, router);
 
     br1.Form();
     nexus.AdvanceTime(kFormNetworkTime);
@@ -208,6 +206,8 @@ void TestMatnTc21(void)
 
     VerifyOrQuit(br1.Get<BackboneRouter::Local>().IsPrimary());
     VerifyOrQuit(!br2.Get<BackboneRouter::Local>().IsPrimary());
+
+    SuccessOrQuit(br1.Get<BorderRouter::RoutingManager>().GetFavoredOnLinkPrefix(onLinkPrefix));
 
     nexus.AddTestVar("MA1", kMA1);
     nexus.AddTestVar("MA3", kMA3);
@@ -413,8 +413,14 @@ void TestMatnTc21(void)
      *   - N/A
      */
     Log("Step 16: Host sends a ICMPv6 Echo Request to MA1 on the backbone link.");
-    host.mInfraIf.SendEchoRequest(host.mInfraIf.GetLinkLocalAddress(), ma1, kEchoIdentifier, kEchoPayloadSize);
-    nexus.AdvanceTime(0);
+    {
+        const Ip6::Address *srcAddr;
+
+        srcAddr = host.mInfraIf.FindAddress(onLinkPrefix);
+        VerifyOrQuit(srcAddr != nullptr);
+        host.mInfraIf.SendEchoRequest(*srcAddr, ma1, kEchoIdentifier, kEchoPayloadSize);
+        nexus.AdvanceTime(0);
+    }
 
     /**
      * Step 17

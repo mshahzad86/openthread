@@ -225,7 +225,7 @@ otError FakePlatform::SettingsGet(uint16_t aKey, uint16_t aIndex, uint8_t *aValu
         return OT_ERROR_NOT_FOUND;
     }
 
-    if (aIndex > setting->second.size())
+    if (aIndex >= setting->second.size())
     {
         return OT_ERROR_NOT_FOUND;
     }
@@ -280,7 +280,13 @@ otError FakePlatform::SettingsDelete(uint16_t aKey, int aIndex)
         return OT_ERROR_NOT_FOUND;
     }
 
-    if (static_cast<std::size_t>(aIndex) >= setting->second.size())
+    if (aIndex == -1)
+    {
+        mSettings.erase(setting);
+        return OT_ERROR_NONE;
+    }
+
+    if (aIndex < 0 || static_cast<std::size_t>(aIndex) >= setting->second.size())
     {
         return OT_ERROR_NOT_FOUND;
     }
@@ -385,7 +391,7 @@ otError otPlatRadioSleep(otInstance *) { return OT_ERROR_NONE; }
 
 otError otPlatRadioReceive(otInstance *, uint8_t aChannel) { return FakePlatform::CurrentPlatform().Receive(aChannel); }
 
-otError otPlatRadioReceiveAt(otInstance *, uint8_t aChannel, uint32_t aStart, uint32_t aDuration)
+otError otPlatRadioReceiveAt(otInstance *, uint8_t aChannel, otRadioTime32 aStart, uint32_t aDuration)
 {
     return FakePlatform::CurrentPlatform().ReceiveAt(aChannel, aStart, aDuration);
 }

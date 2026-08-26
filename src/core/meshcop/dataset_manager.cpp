@@ -189,7 +189,7 @@ Error DatasetManager::ApplyConfiguration(const Dataset &aDataset) const
 
         case Tlv::kWakeupChannel:
         {
-#if OPENTHREAD_CONFIG_WAKEUP_COORDINATOR_ENABLE || OPENTHREAD_CONFIG_WAKEUP_END_DEVICE_ENABLE
+#if OPENTHREAD_CONFIG_TD_WAKE_INITIATOR_ENABLE || OPENTHREAD_CONFIG_TD_WAKE_LISTENER_ENABLE
             uint8_t channel = static_cast<uint8_t>(cur->ReadValueAs<WakeupChannelTlv>().GetChannel());
             error           = Get<Mac::Mac>().SetWakeupChannel(channel);
 
@@ -294,8 +294,6 @@ Error DatasetManager::Save(const Dataset &aDataset, bool aAllowOlderTimestamp)
         mTimer.Start(kSendSetDelay);
     }
 
-    SignalDatasetChange();
-
 exit:
     return error;
 }
@@ -349,8 +347,6 @@ void DatasetManager::SaveLocal(const Dataset &aDataset)
     default:
         break;
     }
-
-    SignalDatasetChange();
 }
 
 void DatasetManager::LocalSave(const Dataset &aDataset)
@@ -393,6 +389,8 @@ void DatasetManager::LocalSave(const Dataset &aDataset)
     {
         Get<PendingDatasetManager>().StartDelayTimer(aDataset);
     }
+
+    SignalDatasetChange();
 }
 
 void DatasetManager::SignalDatasetChange(void) const
@@ -553,9 +551,8 @@ Coap::Message *DatasetManager::ProcessGetRequest(const Coap::Message    &aReques
         {
             uint8_t tlvType;
 
-            IgnoreError(aRequest.Read(offsetRange, tlvType));
+            IgnoreError(aRequest.ReadAndAdvance(offsetRange, tlvType));
             tlvList.Add(tlvType);
-            offsetRange.AdvanceOffset(sizeof(uint8_t));
         }
 
         // MGMT_PENDING_GET.rsp must include Delay Timer TLV (Thread 1.1.1

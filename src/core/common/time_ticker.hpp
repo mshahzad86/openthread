@@ -66,8 +66,6 @@ public:
         kAddressResolver,        ///< `AddressResolver`
         kChildSupervisor,        ///< `ChildSupervisor`
         kIp6FragmentReassembler, ///< `Ip6::Ip6` (handling of fragmented messages)
-        kDuaManager,             ///< `DuaManager`
-        kMlrManager,             ///< `MlrManager`
         kNetworkDataNotifier,    ///< `NetworkData::Notifier`
         kIp6Mpl,                 ///< `Ip6::Mpl`
         kBbrLocal,               ///< `BackboneRouter::Local`
@@ -108,7 +106,7 @@ private:
     static constexpr uint32_t kTickInterval  = Time::kOneSecondInMsec;
     static constexpr uint32_t kRestartJitter = 4; // in msec, jitter added when restarting the timer [-4,+4] ms.
 
-    constexpr static uint32_t Mask(Receiver aReceiver) { return static_cast<uint32_t>(1U) << aReceiver; }
+    static constexpr uint32_t Mask(Receiver aReceiver) { return static_cast<uint32_t>(1U) << aReceiver; }
 
     void HandleTimer(void);
 

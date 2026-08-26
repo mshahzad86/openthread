@@ -58,18 +58,20 @@ jobs:
       REAL_DEVICE: 0
     steps:
     - name: Harden Runner
-      uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
+      uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
       with:
         egress-policy: audit # TODO: change to 'egress-policy: block' after couple of runs
 
     - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       with:
         submodules: recursive
+        persist-credentials: false
     - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
       with:
         python-version: '3.12'
         cache: pip
     - name: Bootstrap
+      timeout-minutes: 10
       run: |
         sudo apt-get update
         sudo apt-get --no-install-recommends install -y ninja-build
@@ -80,7 +82,7 @@ jobs:
         PYTHONPATH=./tests/scripts/thread-cert pytype tools/otci
     - name: Build
       run: |
-        ./script/cmake-build simulation -DOT_THREAD_VERSION=1.4 -DOT_DUA=ON -DOT_MLR=ON -DOT_BACKBONE_ROUTER=ON \
+        ./script/cmake-build simulation -DOT_THREAD_VERSION=1.4 -DOT_MLR=ON -DOT_BACKBONE_ROUTER=ON \
         -DOT_CSL_RECEIVER=ON -DOT_SIMULATION_VIRTUAL_TIME=${VIRTUAL_TIME}
     - name: Install OTCI Python Library
       run: |

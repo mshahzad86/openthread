@@ -605,6 +605,12 @@ otError otNetworkNameFromString(otNetworkName *aNetworkName, const char *aNameSt
  *
  * This method also checks whether there are duplicated TLVs or the TLVs are not well-formed in the @p aDatasetTlvs.
  *
+ * In addition to the TLV lengths, the values of the following TLVs are validated: Channel and Wake-up Channel (the
+ * channel page must be supported and the channel within range), Channel Mask (well-formed entries), PAN ID (must not
+ * be the broadcast PAN ID 0xffff), Extended PAN ID (must not be all-zeros or all-ones), Mesh-Local Prefix (must be a
+ * locally assigned ULA prefix, i.e., `fd00::/8`), Network Name (1 to 16 bytes, valid UTF-8, no control characters),
+ * and Security Policy.
+ *
  * @param[in]  aDatasetTlvs  A pointer to dataset TLVs.
  * @param[in]  aActive       TRUE for Active Dataset, FALSE for Pending Dataset.
  *
@@ -659,6 +665,24 @@ void otDatasetConvertToTlvs(const otOperationalDataset *aDataset, otOperationalD
  * @retval OT_ERROR_NO_BUFS       Not enough space space in @p aDatasetTlvs to apply the update.
  */
 otError otDatasetUpdateTlvs(const otOperationalDataset *aDataset, otOperationalDatasetTlvs *aDatasetTlvs);
+
+/**
+ * Indicates whether or not a given Operational Dataset (in TLVs format) affects connectivity.
+ *
+ * A Dataset affects connectivity if it contains a different Channel, PAN ID, Mesh Local Prefix, Network Key, or
+ * Security Policy than the current values in use.
+ *
+ * The following security policy changes are considered to affect connectivity:
+ * - Disabling routers (R bit: 1 to 0).
+ * - Enabling non-CCM routers (NCR bit: 0 to 1).
+ * - Increasing the version threshold for routing (VR field).
+ *
+ * @param[in]  aInstance     A pointer to an OpenThread instance.
+ * @param[in]  aDatasetTlvs  A pointer to Operational Dataset TLVs.
+ *
+ * @returns TRUE if @p aDatasetTlvs affects connectivity, FALSE otherwise.
+ */
+bool otDatasetAffectsConnectivity(otInstance *aInstance, const otOperationalDatasetTlvs *aDatasetTlvs);
 
 /**
  * @}

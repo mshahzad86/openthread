@@ -50,15 +50,20 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Harden Runner
-      uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
+      uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
       with:
         egress-policy: audit
+
+    - name: Free Disk Space (Ubuntu)
+      uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # main
 
     - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Bootstrap
+      timeout-minutes: 10
       run: |
         sudo add-apt-repository -y ppa:wireshark-dev/stable
         sudo apt-get update
@@ -79,15 +84,20 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: Harden Runner
-      uses: step-security/harden-runner@5ef0c079ce82195b2a36a210272d6b661572d83e # v2.14.2
+      uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
       with:
         egress-policy: audit # TODO: change to 'egress-policy: block' after couple of runs
+
+    - name: Free Disk Space (Ubuntu)
+      uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # main
 
     - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
       with:
         submodules: recursive
+        persist-credentials: false
 
     - name: Bootstrap
+      timeout-minutes: 10
       env:
         PR_BODY: "${{ github.event.pull_request.body }}"
       run: |
@@ -106,3 +116,104 @@ jobs:
     - name: Run TREL Tests
       run: |
         cd build/nexus && ctest -L trel --output-on-failure
+
+  nexus-long-routes-tests:
+    name: nexus-long-routes-tests
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+      with:
+        egress-policy: audit # TODO: change to 'egress-policy: block' after couple of runs
+
+    - name: Free Disk Space (Ubuntu)
+      uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # main
+
+    - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      with:
+        submodules: recursive
+        persist-credentials: false
+
+    - name: Bootstrap
+      timeout-minutes: 10
+      env:
+        PR_BODY: "${{ github.event.pull_request.body }}"
+      run: |
+        sudo apt-get update
+        sudo apt-get --no-install-recommends install -y ninja-build lcov
+
+    - name: Build Nexus
+      run: |
+        mkdir -p build/nexus
+        top_builddir=build/nexus ./tests/nexus/build.sh long_routes
+
+    - name: Run LONG_ROUTES Tests
+      run: |
+        cd build/nexus && ctest -L long_routes --output-on-failure
+
+  nexus-grpc-tests:
+    name: nexus-grpc-tests
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+      with:
+        egress-policy: audit
+
+    - name: Free Disk Space (Ubuntu)
+      uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # main
+
+    - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      with:
+        submodules: recursive
+        persist-credentials: false
+
+    - name: Bootstrap
+      timeout-minutes: 10
+      run: |
+        sudo apt-get update
+        sudo apt-get --no-install-recommends install -y ninja-build libgrpc++-dev libprotobuf-dev protobuf-compiler-grpc
+
+    - name: Build Nexus
+      run: |
+        mkdir -p build/nexus
+        OT_NEXUS_GRPC=ON top_builddir=build/nexus ./tests/nexus/build.sh
+
+    - name: Run GRPC Tests
+      run: |
+        cd build/nexus && ./tests/nexus/nexus_grpc
+
+  nexus-wasm-tests:
+    name: nexus-wasm-tests
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Harden Runner
+      uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+      with:
+        egress-policy: audit
+
+    - name: Free Disk Space (Ubuntu)
+      uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # main
+
+    - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      with:
+        submodules: recursive
+        persist-credentials: false
+
+    - name: Bootstrap
+      timeout-minutes: 10
+      run: |
+        sudo apt-get update
+        sudo apt-get --no-install-recommends install -y ninja-build
+
+    - name: Set up Emscripten
+      uses: mymindstorm/setup-emsdk@6ab9eb1bda2574c4ddb79809fc9247783eaf9021 # v14
+
+    - name: Build Nexus WASM
+      run: |
+        mkdir -p build/nexus
+        top_builddir=build/nexus ./tests/nexus/build.sh wasm
+
+    - name: Run WASM Smoke Test
+      run: |
+        node tests/nexus/test_wasm_bindings.mjs build/nexus/tests/nexus/nexus_live_demo.js

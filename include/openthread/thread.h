@@ -629,38 +629,6 @@ const char *otThreadGetDomainName(otInstance *aInstance);
 otError otThreadSetDomainName(otInstance *aInstance, const char *aDomainName);
 
 /**
- * Sets or clears the Interface Identifier manually specified for the Thread Domain Unicast Address.
- *
- * Available when `OPENTHREAD_CONFIG_DUA_ENABLE` is enabled.
- *
- * @note Only available since Thread 1.2.
- *
- * @param[in]  aInstance   A pointer to an OpenThread instance.
- * @param[in]  aIid        A pointer to the Interface Identifier to set or NULL to clear.
- *
- * @retval OT_ERROR_NONE           Successfully set/cleared the Interface Identifier.
- * @retval OT_ERROR_INVALID_ARGS   The specified Interface Identifier is reserved.
- *
- * @sa otThreadGetFixedDuaInterfaceIdentifier
- */
-otError otThreadSetFixedDuaInterfaceIdentifier(otInstance *aInstance, const otIp6InterfaceIdentifier *aIid);
-
-/**
- * Gets the Interface Identifier manually specified for the Thread Domain Unicast Address.
- *
- * Available when `OPENTHREAD_CONFIG_DUA_ENABLE` is enabled.
- *
- * @note Only available since Thread 1.2.
- *
- * @param[in]  aInstance A pointer to an OpenThread instance.
- *
- * @returns A pointer to the Interface Identifier which was set manually, or NULL if none was set.
- *
- * @sa otThreadSetFixedDuaInterfaceIdentifier
- */
-const otIp6InterfaceIdentifier *otThreadGetFixedDuaInterfaceIdentifier(otInstance *aInstance);
-
-/**
  * Gets the thrKeySequenceCounter.
  *
  * @param[in]  aInstance A pointer to an OpenThread instance.
@@ -1073,24 +1041,6 @@ void otThreadSendAddressNotification(otInstance               *aInstance,
                                      otIp6InterfaceIdentifier *aMlIid);
 
 /**
- * Sends a Proactive Backbone Notification (PRO_BB.ntf) message on the Backbone link.
- *
- * Is only available when `OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE` is enabled.
- *
- * @param[in]  aInstance                    A pointer to an OpenThread instance.
- * @param[in]  aTarget                      The target address of the PRO_BB.ntf message.
- * @param[in]  aMlIid                       The ML-IID of the PRO_BB.ntf message.
- * @param[in]  aTimeSinceLastTransaction    Time since last transaction (in seconds).
- *
- * @retval OT_ERROR_NONE           Successfully sent PRO_BB.ntf on backbone link.
- * @retval OT_ERROR_NO_BUFS        If insufficient message buffers available.
- */
-otError otThreadSendProactiveBackboneNotification(otInstance               *aInstance,
-                                                  otIp6Address             *aTarget,
-                                                  otIp6InterfaceIdentifier *aMlIid,
-                                                  uint32_t                  aTimeSinceLastTransaction);
-
-/**
  * Notifies other nodes in the network (if any) and then stops Thread protocol operation.
  *
  * It sends an Address Release if it's a router, or sets its child timeout to 0 if it's a child.
@@ -1153,7 +1103,7 @@ uint32_t otThreadGetStoreFrameCounterAhead(otInstance *aInstance);
 /**
  * Attempts to wake a Wake-up End Device.
  *
- * Requires `OPENTHREAD_CONFIG_WAKEUP_COORDINATOR_ENABLE` to be enabled.
+ * Requires `OPENTHREAD_CONFIG_TD_WAKE_INITIATOR_ENABLE` to be enabled.
  *
  * The wake-up starts with transmitting a wake-up frame sequence to the Wake-up End Device.
  * During the wake-up sequence, and for a short time after the last wake-up frame is sent, the Wake-up Coordinator keeps

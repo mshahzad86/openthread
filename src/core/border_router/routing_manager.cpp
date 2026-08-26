@@ -224,7 +224,7 @@ void RoutingManager::LoadOrGenerateRandomBrUlaPrefix(void)
 
         SuccessOrAssert(randomUlaPrefix.GenerateRandomUla());
 
-        mBrUlaPrefix.Set(randomUlaPrefix);
+        mBrUlaPrefix.InitFrom(randomUlaPrefix);
         mBrUlaPrefix.SetSubnetId(0);
         mBrUlaPrefix.SetLength(kBrUlaPrefixLength);
 
@@ -641,7 +641,7 @@ bool RoutingManager::NetworkDataContainsUlaRoute(void) const
 {
     // Determine whether leader Network Data contains a route
     // prefix which is either the ULA prefix `fc00::/7` or
-    // a sub-prefix of it (e.g., default route).
+    // a broader prefix covering it (e.g., default route).
 
     NetworkData::Iterator            iterator = NetworkData::kIteratorInit;
     NetworkData::ExternalRouteConfig routeConfig;
@@ -649,7 +649,7 @@ bool RoutingManager::NetworkDataContainsUlaRoute(void) const
 
     while (Get<NetworkData::Leader>().GetNext(iterator, routeConfig) == kErrorNone)
     {
-        if (routeConfig.mStable && RoutePublisher::GetUlaPrefix().ContainsPrefix(routeConfig.GetPrefix()))
+        if (routeConfig.mStable && RoutePublisher::GetUlaPrefix().IsCoveredBy(routeConfig.GetPrefix()))
         {
             contains = true;
             break;
@@ -706,8 +706,8 @@ void RoutingManager::CheckReachabilityToSendIcmpError(const Message &aMessage, c
     messageInfo.Clear();
     messageInfo.SetPeerAddr(aIp6Header.GetSource());
 
-    IgnoreError(Get<Ip6::Icmp>().SendError(Ip6::Icmp::Header::kTypeDstUnreach,
-                                           Ip6::Icmp::Header::kCodeDstUnreachProhibited, messageInfo, aMessage));
+    IgnoreError(Get<Ip6::Icmp>().SendError(Ip6::Icmp6Header::kTypeDstUnreach,
+                                           Ip6::Icmp6Header::kCodeDstUnreachProhibited, messageInfo, aMessage));
 
 exit:
     return;
@@ -986,7 +986,7 @@ void RoutingManager::OmrPrefixManager::Evaluate(void)
         {
         case kNotAdded:
         {
-            uint32_t delay = Random::NonCrypto::GetUint32InRange(kMinDelayToAdd, kMaxDelayToAdd);
+            uint32_t delay = Random::NonCrypto::GenerateInClosedRange(kMinDelayToAdd, kMaxDelayToAdd);
 
             mLocalInNetDataState = kToAdd;
             mTimer.Start(delay);
@@ -1168,11 +1168,6 @@ RoutingManager::OmrPrefixManager::InfoString RoutingManager::OmrPrefixManager::F
     {
         string.Append("%s (prf:%s", aFavoredPrefix.GetPrefix().ToString().AsCString(),
                       RoutePreferenceToString(aFavoredPrefix.GetPreference()));
-
-        if (aFavoredPrefix.IsDomainPrefix())
-        {
-            string.Append(", domain");
-        }
 
         if (aFavoredPrefix.GetPrefix() == mLocalPrefix.GetPrefix())
         {
@@ -1493,12 +1488,12 @@ void RoutingManager::OnLinkPrefixManager::PublishAndAdvertise(void)
     SetState(kPublishing);
     ResetExpireTime(TimerMilli::GetNow());
 
-    // We wait for the ULA `fc00::/7` route or a sub-prefix of it (e.g.,
-    // default route) to be added in Network Data before
-    // starting to advertise the local on-link prefix in RAs.
-    // However, if it is already present in Network Data (e.g.,
-    // added by another BR on the same Thread mesh), we can
-    // immediately start advertising it.
+    // We wait for the ULA `fc00::/7` route or a broader prefix
+    // covering it (e.g., default route) to be added in Network Data
+    // before starting to advertise the local on-link prefix in RAs.
+    // However, if it is already present in Network Data (e.g., added
+    // by another BR on the same Thread mesh), we can immediately
+    // start advertising it.
 
     if (Get<RoutingManager>().NetworkDataContainsUlaRoute())
     {
@@ -1909,7 +1904,7 @@ Error RoutingManager::RioAdvertiser::AppendRios(RouterAdvert::TxMessage &aRaMess
 
     // (2) Favored OMR prefix.
 
-    if (!omrPrefixManager.GetFavoredPrefix().IsEmpty() && !omrPrefixManager.GetFavoredPrefix().IsDomainPrefix())
+    if (!omrPrefixManager.GetFavoredPrefix().IsEmpty())
     {
         mPrefixes.Add(omrPrefixManager.GetFavoredPrefix().GetPrefix());
     }
@@ -1928,11 +1923,6 @@ Error RoutingManager::RioAdvertiser::AppendRios(RouterAdvert::TxMessage &aRaMess
         // it, while it might still be present in the Network Data due to
         // delays in registering changes with the leader.
 
-        if (prefixConfig.mDp)
-        {
-            continue;
-        }
-
         if (IsValidOmrPrefix(prefixConfig) &&
             (prefixConfig.GetPrefix() != omrPrefixManager.GetLocalPrefix().GetPrefix()))
         {
@@ -1940,13 +1930,13 @@ Error RoutingManager::RioAdvertiser::AppendRios(RouterAdvert::TxMessage &aRaMess
         }
     }
 
-    // (4) All other on-mesh prefixes (excluding Domain Prefix).
+    // (4) All other on-mesh prefixes.
 
     iterator = NetworkData::kIteratorInit;
 
     while (Get<NetworkData::Leader>().GetNext(iterator, prefixConfig) == kErrorNone)
     {
-        if (prefixConfig.mOnMesh && !prefixConfig.mDp && !IsValidOmrPrefix(prefixConfig))
+        if (prefixConfig.mOnMesh && !IsValidOmrPrefix(prefixConfig))
         {
             mPrefixes.Add(prefixConfig.GetPrefix());
         }
@@ -2271,9 +2261,9 @@ const char *RoutingManager::RoutePublisher::StateToString(State aState)
     _(kPublishDefault, "def-route")   \
     _(kPublishUla, "ula")
 
-    DefineEnumStringArray(RoutePublisherStateMapList)
+    DefineEnumStringArray(RoutePublisherStateMapList);
 
-        return kStrings[aState];
+    return kStrings[aState];
 }
 
 #if OPENTHREAD_CONFIG_NAT64_BORDER_ROUTING_ENABLE

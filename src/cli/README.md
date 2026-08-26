@@ -50,7 +50,6 @@ Done
 - [discover](#discover-channel)
 - [dns](#dns-config)
 - [domainname](#domainname)
-- [dua](#dua-iid)
 - [eidcache](#eidcache)
 - [eui64](#eui64)
 - [extaddr](#extaddr)
@@ -171,30 +170,6 @@ Done
 ```bash
 > bbr
 BBR Primary: None
-Done
-```
-
-### bbr mgmt dua \<status\|coap-code\> [meshLocalIid]
-
-Configure the response status for DUA.req with meshLocalIid in payload. Without meshLocalIid, simply respond any coming DUA.req next with the specified status or COAP code.
-
-Only for testing/reference device.
-
-known status value:
-
-- 0: ST_DUA_SUCCESS
-- 1: ST_DUA_REREGISTER
-- 2: ST_DUA_INVALID
-- 3: ST_DUA_DUPLICATE
-- 4: ST_DUA_NO_RESOURCES
-- 5: ST_DUA_BBR_NOT_PRIMARY
-- 6: ST_DUA_GENERAL_FAILURE
-- 160: COAP code 5.00
-
-```bash
-> bbr mgmt dua 1 2f7c235e5025a2fd
-Done
-> bbr mgmt dua 160
 Done
 ```
 
@@ -1959,34 +1934,6 @@ Set the Thread Domain Name for Thread 1.2 device.
 Done
 ```
 
-### dua iid
-
-Get the Interface Identifier manually specified for Thread Domain Unicast Address on Thread 1.2 device.
-
-```bash
-> dua iid
-0004000300020001
-Done
-```
-
-### dua iid \<iid\>
-
-Set the Interface Identifier manually specified for Thread Domain Unicast Address on Thread 1.2 device.
-
-```bash
-> dua iid 0004000300020001
-Done
-```
-
-### dua iid clear
-
-Clear the Interface Identifier manually specified for Thread Domain Unicast Address on Thread 1.2 device.
-
-```bash
-> dua iid clear
-Done
-```
-
 ### eidcache
 
 Print the EID-to-RLOC cache entries.
@@ -2556,7 +2503,7 @@ Locate the closest destination of an anycast address (i.e., find the destination
 
 `OPENTHREAD_CONFIG_TMF_ANYCAST_LOCATOR_ENABLE` is required.
 
-The closest destination is determined based on the the current routing table and path costs within the Thread mesh.
+The closest destination is determined based on the current routing table and path costs within the Thread mesh.
 
 Locate the leader using its anycast address:
 
@@ -3353,7 +3300,7 @@ Done
 
 Wakes up the peer identified by the extended address and establishes a peer-to-peer link with the peer.
 
-`OPENTHREAD_CONFIG_P2P_ENABLE` and `OPENTHREAD_CONFIG_WAKEUP_COORDINATOR_ENABLE` are required.
+`OPENTHREAD_CONFIG_P2P_ENABLE` and `OPENTHREAD_CONFIG_TD_WAKE_INITIATOR_ENABLE` are required.
 
 ```bash
 > p2p link extaddr dead00beef00cafe
@@ -3596,7 +3543,7 @@ Done
 
 ### prefix
 
-Get the prefix list in the local Network Data. Note: For the Thread 1.2 border router with backbone capability, the local Domain Prefix would be listed as well (with flag `D`), with preceding `-` if backbone functionality is disabled.
+Get the prefix list in the local Network Data.
 
 ```bash
 > prefix
@@ -3609,8 +3556,6 @@ Done
 
 Add a valid prefix to the Network Data.
 
-Note: The Domain Prefix flag (`D`) is only available for Thread 1.2.
-
 - p: Preferred flag
 - a: Stateless IPv6 Address Autoconfiguration flag
 - d: DHCPv6 IPv6 Address Configuration flag
@@ -3619,7 +3564,6 @@ Note: The Domain Prefix flag (`D`) is only available for Thread 1.2.
 - o: On Mesh flag
 - s: Stable flag
 - n: Nd Dns flag
-- D: Domain Prefix flag
 - prf: Default router preference, which may be 'high', 'med', or 'low'.
 
 ```bash
@@ -4900,7 +4844,7 @@ Factory Diagnostics module is enabled only when building OpenThread with `OPENTH
 
 Get the wake-up channel.
 
-Requires `OPENTHREAD_CONFIG_WAKEUP_COORDINATOR_ENABLE` or `OPENTHREAD_CONFIG_WAKEUP_END_DEVICE_ENABLE`.
+Requires `OPENTHREAD_CONFIG_TD_WAKE_INITIATOR_ENABLE` or `OPENTHREAD_CONFIG_TD_WAKE_LISTENER_ENABLE`.
 
 ```bash
 > wakeup channel
@@ -4912,7 +4856,7 @@ Done
 
 Set the wake-up channel.
 
-Requires `OPENTHREAD_CONFIG_WAKEUP_COORDINATOR_ENABLE` or `OPENTHREAD_CONFIG_WAKEUP_END_DEVICE_ENABLE`.
+Requires `OPENTHREAD_CONFIG_TD_WAKE_INITIATOR_ENABLE` or `OPENTHREAD_CONFIG_TD_WAKE_LISTENER_ENABLE`.
 
 ```bash
 > wakeup channel 12
@@ -4923,7 +4867,7 @@ Done
 
 Get the wake-up listen interval and duration.
 
-Requires `OPENTHREAD_CONFIG_WAKEUP_END_DEVICE_ENABLE`.
+Requires `OPENTHREAD_CONFIG_TD_WAKE_LISTENER_ENABLE`.
 
 ```bash
 > wakeup parameters
@@ -4936,7 +4880,7 @@ Done
 
 Set the wake-up listen interval and duration.
 
-Requires `OPENTHREAD_CONFIG_WAKEUP_END_DEVICE_ENABLE`.
+Requires `OPENTHREAD_CONFIG_TD_WAKE_LISTENER_ENABLE`.
 
 ```bash
 > wakeup parameters 1000000 8000
@@ -4947,7 +4891,7 @@ Done
 
 Show the state of wake-up listening feature.
 
-`OPENTHREAD_CONFIG_WAKEUP_END_DEVICE_ENABLE` is required.
+`OPENTHREAD_CONFIG_TD_WAKE_LISTENER_ENABLE` is required.
 
 ```bash
 > wakeup listen
@@ -4959,7 +4903,7 @@ Done
 
 Enable/disable listening for wake-up frames.
 
-`OPENTHREAD_CONFIG_WAKEUP_END_DEVICE_ENABLE` is required.
+`OPENTHREAD_CONFIG_TD_WAKE_LISTENER_ENABLE` is required.
 
 ```bash
 > wakeup listen enable
@@ -4970,7 +4914,7 @@ Done
 
 Wakes a Wake-up End Device.
 
-`OPENTHREAD_CONFIG_WAKEUP_COORDINATOR_ENABLE` is required.
+`OPENTHREAD_CONFIG_TD_WAKE_INITIATOR_ENABLE` is required.
 
 ```bash
 > wakeup wake 1ece0a6c4653a7c1 7500 1090

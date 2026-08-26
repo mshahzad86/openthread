@@ -390,15 +390,6 @@ public:
      */
     const Mle::KeyMaterial &GetTemporaryMleKey(uint32_t aKeySequence);
 
-    /**
-     * Returns a temporary MAC key Material computed from the given key sequence.
-     *
-     * @param[in]  aKeySequence  The key sequence value.
-     *
-     * @returns The temporary MAC key.
-     */
-    const Mle::KeyMaterial &GetTemporaryMacKey(uint32_t aKeySequence);
-
 #if OPENTHREAD_CONFIG_RADIO_LINK_IEEE_802_15_4_ENABLE
     /**
      * Returns the current MAC Frame Counter value for 15.4 radio link.
@@ -480,6 +471,14 @@ public:
     const KekKeyMaterial &GetKek(void) const { return mKek; }
 
     /**
+     * Indicates whether or not the KEK is set.
+     *
+     * @retval TRUE   If the KEK is set.
+     * @retval FALSE  If the KEK is not set.
+     */
+    bool IsKekSet(void) const { return mIsKekSet; }
+
+    /**
      * Retrieves the KEK as literal `Kek` key.
      *
      * @param[out] aKek  A reference to a `Kek` to output the retrieved KEK.
@@ -499,6 +498,11 @@ public:
      * @param[in]  aKekBytes  A pointer to the KEK bytes.
      */
     void SetKek(const uint8_t *aKekBytes) { SetKek(*reinterpret_cast<const Kek *>(aKekBytes)); }
+
+    /**
+     * Clears the KEK.
+     */
+    void ClearKek(void);
 
     /**
      * Returns the current KEK Frame Counter value.
@@ -708,10 +712,6 @@ private:
     // Dynamic pool: entry 0 = router's own, remaining from panids/pankeys
     PanIdAssignment mPanIdPool[kMaxPanKeys + 1];
     uint8_t         mPanIdPoolSize = 0;
-    
-#if OPENTHREAD_CONFIG_WAKEUP_END_DEVICE_ENABLE
-    Mle::KeyMaterial mTemporaryMacKey;
-#endif
 
 #if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
     Mac::KeyMaterial mTrelKey;
@@ -739,6 +739,7 @@ private:
 
     SecurityPolicy mSecurityPolicy;
     bool           mIsPskcSet : 1;
+    bool           mIsKekSet : 1;
 };
 
 /**

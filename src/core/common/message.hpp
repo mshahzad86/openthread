@@ -81,6 +81,10 @@ class HmacSha256;
 
 } // namespace Crypto
 
+namespace Ip6 {
+class PlatTcp;
+} // namespace Ip6
+
 /**
  * @addtogroup core-message
  *
@@ -223,7 +227,7 @@ protected:
         uint8_t mOrigin : 2;   // The origin of the message.
 #if OPENTHREAD_CONFIG_MULTI_RADIO
         uint8_t mRadioType : 2; // The radio link type the message was received on, or should be sent on.
-        static_assert(Mac::kNumRadioTypes <= (1 << 2), "mRadioType bitfield cannot store all radio type values");
+        static_assert(Radio::kNumTypes <= (1 << 2), "mRadioType bitfield cannot store all radio type values");
 #endif
         uint8_t mType : 3;    // The message type.
         uint8_t mSubType : 4; // The message sub type.
@@ -258,14 +262,14 @@ protected:
     static constexpr uint16_t kBufferDataSize     = kSize - sizeof(otMessageBuffer);
     static constexpr uint16_t kHeadBufferDataSize = kBufferDataSize - sizeof(Metadata);
 
-    Metadata       &GetMetadata(void) { return mBuffer.mHead.mMetadata; }
-    const Metadata &GetMetadata(void) const { return mBuffer.mHead.mMetadata; }
+    Metadata       &GetMetadata(void) OT_LIFETIME_BOUND { return mBuffer.mHead.mMetadata; }
+    const Metadata &GetMetadata(void) const OT_LIFETIME_BOUND { return mBuffer.mHead.mMetadata; }
 
-    uint8_t       *GetFirstData(void) { return mBuffer.mHead.mData; }
-    const uint8_t *GetFirstData(void) const { return mBuffer.mHead.mData; }
+    uint8_t       *GetFirstData(void) OT_LIFETIME_BOUND { return mBuffer.mHead.mData; }
+    const uint8_t *GetFirstData(void) const OT_LIFETIME_BOUND { return mBuffer.mHead.mData; }
 
-    uint8_t       *GetData(void) { return mBuffer.mData; }
-    const uint8_t *GetData(void) const { return mBuffer.mData; }
+    uint8_t       *GetData(void) OT_LIFETIME_BOUND { return mBuffer.mData; }
+    const uint8_t *GetData(void) const OT_LIFETIME_BOUND { return mBuffer.mData; }
 
 private:
     union
@@ -285,7 +289,7 @@ static_assert(sizeof(Buffer) >= Buffer::kSize,
 /**
  * Represents a message.
  */
-class Message : public otMessage, public Buffer, public GetProvider<Message>
+class OT_GSL_OWNER Message : public otMessage, public Buffer, public GetProvider<Message>
 {
     friend class Checksum;
     friend class CrcCalculator<uint16_t>;
@@ -293,6 +297,7 @@ class Message : public otMessage, public Buffer, public GetProvider<Message>
     friend class Crypto::HmacSha256;
     friend class Crypto::Sha256;
     friend class Crypto::AesCcm;
+    friend class Ip6::PlatTcp;
     friend class MessagePool;
     friend class MessageQueue;
     friend class PriorityQueue;
@@ -944,6 +949,37 @@ public:
     }
 
     /**
+     * Reads a given number of bytes from the message at a given offset range and advances the offset range.
+     *
+     * @param[in,out] aOffsetRange  The offset range in the message to read from. On success, it is advanced.
+     * @param[out]    aBuf          A pointer to a data buffer to copy the read bytes into.
+     * @param[in]     aLength       Number of bytes to read.
+     *
+     * @retval kErrorNone     Requested bytes were successfully read from message. @p aOffsetRange is advanced.
+     * @retval kErrorParse    Not enough bytes remaining to read the requested @p aLength. @p aOffsetRange is unchanged.
+     */
+    Error ReadAndAdvance(OffsetRange &aOffsetRange, void *aBuf, uint16_t aLength) const;
+
+    /**
+     * Reads an object from the message at a given offset range and advances the offset range.
+     *
+     * @tparam     ObjectType   The object type to read from the message.
+     *
+     * @param[in,out] aOffsetRange  The offset range in the message to read from. On success, it is advanced.
+     * @param[out]    aObject       A reference to the object to read into.
+     *
+     * @retval kErrorNone     Object @p aObject was successfully read from message. @p aOffsetRange is advanced.
+     * @retval kErrorParse    Not enough bytes remaining in message to read the entire object. @p aOffsetRange is
+     * unchanged.
+     */
+    template <typename ObjectType> Error ReadAndAdvance(OffsetRange &aOffsetRange, ObjectType &aObject) const
+    {
+        static_assert(!TypeTraits::IsPointer<ObjectType>::kValue, "ObjectType must not be a pointer");
+
+        return ReadAndAdvance(aOffsetRange, &aObject, sizeof(ObjectType));
+    }
+
+    /**
      * Reads a given number of bytes from the message at the current message offset and advances the message offset.
      *
      * @param[out] aBuf     A pointer to a data buffer to copy the read bytes into.
@@ -1537,14 +1573,14 @@ public:
      *
      * @returns The radio link type of the message.
      */
-    Mac::RadioType GetRadioType(void) const { return static_cast<Mac::RadioType>(GetMetadata().mRadioType); }
+    Radio::Type GetRadioType(void) const { return static_cast<Radio::Type>(GetMetadata().mRadioType); }
 
     /**
      * Sets the radio link type the message was received on, or should be sent on.
      *
      * @param[in] aRadioType   A radio link type of the message.
      */
-    void SetRadioType(Mac::RadioType aRadioType)
+    void SetRadioType(Radio::Type aRadioType)
     {
         GetMetadata().mIsRadioTypeSet = true;
         GetMetadata().mRadioType      = aRadioType;
@@ -1560,7 +1596,7 @@ public:
 #endif // #if OPENTHREAD_CONFIG_MULTI_RADIO
 
 protected:
-    class ConstIterator : public ItemPtrIterator<const Message, ConstIterator>
+    class OT_GSL_POINTER ConstIterator : public ItemPtrIterator<const Message, ConstIterator>
     {
         friend class ItemPtrIterator<const Message, ConstIterator>;
 
@@ -1576,7 +1612,7 @@ protected:
         void Advance(void) { mItem = mItem->GetNext(); }
     };
 
-    class Iterator : public ItemPtrIterator<Message, Iterator>
+    class OT_GSL_POINTER Iterator : public ItemPtrIterator<Message, Iterator>
     {
         friend class ItemPtrIterator<Message, Iterator>;
 
@@ -1603,20 +1639,21 @@ protected:
     void     SetReserved(uint16_t aReservedHeader) { GetMetadata().mReserved = aReservedHeader; }
 
 private:
-    class Chunk : public Data<kWithUint16Length>
+    class OT_GSL_POINTER Chunk : public Data<kWithUint16Length>
     {
     public:
-        const Buffer *GetBuffer(void) const { return mBuffer; }
+        // Note: `GetBytes() const OT_LIFETIME_BOUND` is inherited from `Data<kWithUint16Length>`.
+        const Buffer *GetBuffer(void) const OT_LIFETIME_BOUND { return mBuffer; }
         void          SetBuffer(const Buffer *aBuffer) { mBuffer = aBuffer; }
 
     private:
         const Buffer *mBuffer; // Buffer containing the chunk
     };
 
-    class MutableChunk : public Chunk
+    class OT_GSL_POINTER MutableChunk : public Chunk
     {
     public:
-        uint8_t *GetBytes(void) { return AsNonConst(Chunk::GetBytes()); }
+        uint8_t *GetBytes(void) OT_LIFETIME_BOUND { return AsNonConst(Chunk::GetBytes()); }
     };
 
     void GetFirstChunk(uint16_t aOffset, uint16_t &aLength, Chunk &aChunk) const;
@@ -1639,10 +1676,10 @@ private:
     void SetRssAverager(const RssAverager &aRssAverager) { GetMetadata().mRssAverager = aRssAverager; }
     void SetLqiAverager(const LqiAverager &aLqiAverager) { GetMetadata().mLqiAverager = aLqiAverager; }
 
-    Message       *&Next(void) { return GetMetadata().mNext; }
-    Message *const &Next(void) const { return GetMetadata().mNext; }
-    Message       *&Prev(void) { return GetMetadata().mPrev; }
-    Message *const &Prev(void) const { return GetMetadata().mPrev; }
+    Message       *&Next(void) OT_LIFETIME_BOUND { return GetMetadata().mNext; }
+    Message *const &Next(void) const OT_LIFETIME_BOUND { return GetMetadata().mNext; }
+    Message       *&Prev(void) OT_LIFETIME_BOUND { return GetMetadata().mPrev; }
+    Message *const &Prev(void) const OT_LIFETIME_BOUND { return GetMetadata().mPrev; }
 
     static Message       *NextOf(Message *aMessage) { return (aMessage != nullptr) ? aMessage->Next() : nullptr; }
     static const Message *NextOf(const Message *aMessage) { return (aMessage != nullptr) ? aMessage->Next() : nullptr; }
@@ -1682,6 +1719,14 @@ public:
      */
     ~MessageQueue(void) { DequeueAndFreeAll(); }
 #endif
+
+    /**
+     * Indicates whether the message queue is empty.
+     *
+     * @retval TRUE   The message queue is empty.
+     * @retval FALSE  The message queue is not empty.
+     */
+    bool IsEmpty(void) const { return GetHead() == nullptr; }
 
     /**
      * Returns a pointer to the first message.
@@ -1730,6 +1775,15 @@ public:
      * Removes and frees all messages from the queue.
      */
     void DequeueAndFreeAll(void);
+
+    /**
+     * Enqueues all messages from another message queue at the end of this queue.
+     *
+     * Upon return, @p aOtherQueue will be empty.
+     *
+     * @param[in,out] aOtherQueue  The other message queue to enqueue from.
+     */
+    void EnqueueAllFrom(MessageQueue &aOtherQueue);
 
     /**
      * Gets the information about number of messages and buffers in the queue.

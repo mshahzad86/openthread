@@ -331,10 +331,9 @@ void Test_1_4_PIC_TC_1(void)
      *   - Pass Criteria:
      *     - N/A
      */
-    br1.AllowList(r1);
-    r1.AllowList(br1);
-    r1.AllowList(ed1);
-    ed1.AllowList(r1);
+
+    AllowLinkBetween(br1, r1);
+    AllowLinkBetween(r1, ed1);
 
     br1.Form();
     nexus.AdvanceTime(kFormNetworkTime);
@@ -350,7 +349,7 @@ void Test_1_4_PIC_TC_1(void)
     r1.Join(br1);
     nexus.AdvanceTime(kJoinNetworkTime);
 
-    ed1.Join(r1);
+    ed1.Join(r1, Node::kAsFed);
     nexus.AdvanceTime(kJoinNetworkTime);
 
     Log("Step 4: BR_1 obtains OMR prefix via DHCPv6-PD");

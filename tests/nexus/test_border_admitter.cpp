@@ -1859,7 +1859,7 @@ void TestBorderAdmitterJoinerEnrollerInteraction(void)
                                                   /* aCallback */ nullptr,
                                                   /* aContext */ nullptr));
 
-    joinerIids[0].SetFromExtAddress(joiners[0]->Get<Joiner>().GetId());
+    joinerIids[0].InitFromExtAddress(joiners[0]->Get<Joiner>().GetId());
 
     nexus.AdvanceTime(8 * Time::kOneSecondInMsec);
 
@@ -2008,7 +2008,7 @@ void TestBorderAdmitterJoinerEnrollerInteraction(void)
                                                   /* aCallback */ nullptr,
                                                   /* aContext */ nullptr));
 
-    joinerIids[1].SetFromExtAddress(joiners[1]->Get<Joiner>().GetId());
+    joinerIids[1].InitFromExtAddress(joiners[1]->Get<Joiner>().GetId());
 
     nexus.AdvanceTime(8 * Time::kOneSecondInMsec);
 
@@ -2154,7 +2154,7 @@ void TestBorderAdmitterJoinerEnrollerInteraction(void)
                                                   /* aCallback */ nullptr,
                                                   /* aContext */ nullptr));
 
-    joinerIids[1].SetFromExtAddress(joiners[1]->Get<Joiner>().GetId());
+    joinerIids[1].InitFromExtAddress(joiners[1]->Get<Joiner>().GetId());
 
     nexus.AdvanceTime(8 * Time::kOneSecondInMsec);
 
@@ -3175,7 +3175,7 @@ void TestBorderAdmitterForwardingUdpProxy(void)
 
     static const char *kEnrollerIds[kNumEnrollers] = {"1", "2", "3", "4"};
 
-    static const uint8_t kDiagTlvs[] = {NetworkDiagnostic::Tlv::kExtMacAddress, NetworkDiagnostic::Tlv::kVersion};
+    static const uint8_t kDiagTlvs[] = {NetDiag::Tlv::kExtMacAddress, NetDiag::Tlv::kVersion};
 
     Core                               nexus;
     Node                              &admitter = nexus.CreateNode();
@@ -3196,7 +3196,6 @@ void TestBorderAdmitterForwardingUdpProxy(void)
     uint16_t                           sessionId;
     uint16_t                           rloc16;
     MeshCoP::UdpEncapsulationTlvHeader udpEncapHeader;
-    ExtendedTlv                        extTlv;
 
     Log("------------------------------------------------------------------------------------------------------");
     Log("TestBorderAdmitterForwardingUdpProxy");
@@ -3348,7 +3347,7 @@ void TestBorderAdmitterForwardingUdpProxy(void)
 
     diagMessage = enrollers[0]->Get<Tmf::Agent>().AllocateAndInitNonConfirmablePostMessage(kUriDiagnosticGetQuery);
     VerifyOrQuit(diagMessage != nullptr);
-    SuccessOrQuit(Tlv::Append<NetworkDiagnostic::TypeListTlv>(*diagMessage, kDiagTlvs, sizeof(kDiagTlvs)));
+    SuccessOrQuit(Tlv::Append<NetDiag::TypeListTlv>(*diagMessage, kDiagTlvs, sizeof(kDiagTlvs)));
     diagMessage->WriteMessageId(0);
 
     // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -3360,10 +3359,8 @@ void TestBorderAdmitterForwardingUdpProxy(void)
     udpEncapHeader.SetSourcePort(Tmf::kUdpPort);
     udpEncapHeader.SetDestinationPort(Tmf::kUdpPort);
 
-    extTlv.SetType(MeshCoP::Tlv::kUdpEncapsulation);
-    extTlv.SetLength(sizeof(udpEncapHeader) + diagMessage->GetLength());
-
-    SuccessOrQuit(message->Append(extTlv));
+    SuccessOrQuit(Tlv::AppendTlvHeader(*message, MeshCoP::Tlv::kUdpEncapsulation,
+                                       sizeof(udpEncapHeader) + diagMessage->GetLength()));
     SuccessOrQuit(message->Append(udpEncapHeader));
     SuccessOrQuit(message->AppendBytesFromMessage(*diagMessage, 0, diagMessage->GetLength()));
     diagMessage->Free();

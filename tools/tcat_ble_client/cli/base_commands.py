@@ -244,6 +244,27 @@ class DisconnectCommand(Command):
         return CommandResultNone()
 
 
+class SimulationBleDisconnectCommand(Command):
+
+    def get_help_string(self) -> str:
+        return 'Simulate a BLE link break to a simulated TCAT device (no Disconnect TLV, no TLS shutdown).'
+
+    async def execute_default(self, args, context) -> CommandResult:
+        ble_stream = context['ble_stream']
+        if not isinstance(ble_stream, UdpStream):
+            return CommandResultError('only available for a simulation connection (use \'simulation <id>\' first).')
+
+        print('Disconnecting simulated BLE link...')
+        # Signal the abrupt link break to the device, then drop local stream state without a TLS
+        # shutdown (no close-notify), mirroring a real abrupt disconnect on the client side too.
+        await ble_stream.simulation_ble_disconnect()
+        await ble_stream.disconnect()
+        context['ble_stream'] = None
+        context['ble_sstream'] = None
+        print('Done')
+        return CommandResultNone()
+
+
 class ExtractDatasetCommand(BleCommand):
 
     def get_log_string(self) -> str:
@@ -322,41 +343,6 @@ class GetNetworkNameCommand(BleCommand):
 
     def prepare_data(self, args, context) -> bytes:
         return TLV(TcatTLVType.GET_NETWORK_NAME.value, bytes()).to_bytes()
-
-
-class GetPskdHash(BleCommand):
-
-    def __init__(self):
-        super().__init__()
-        self.digest = None
-
-    def get_log_string(self) -> str:
-        return 'Retrieving peer PSKd hash.'
-
-    def get_help_string(self) -> str:
-        return 'Get calculated PSKd hash.'
-
-    def prepare_data(self, args, context) -> bytes:
-        bless: BleStreamSecure = context['ble_sstream']
-        if bless.peer_public_key is None:
-            raise DataNotPrepared("Peer certificate not present.")
-
-        challenge = token_bytes(CHALLENGE_SIZE)
-        pskd = bytes(args[0], 'utf-8')
-
-        data = TLV(TcatTLVType.GET_PSKD_HASH.value, challenge).to_bytes()
-
-        hash = hmac.new(pskd, digestmod=sha256)
-        hash.update(challenge)
-        hash.update(bless.peer_public_key)
-        self.digest = hash.digest()
-        return data
-
-    def process_response(self, tlv_response, context) -> None:
-        if tlv_response.value == self.digest:
-            print('Requested hash is valid.')
-        else:
-            print('Requested hash is NOT valid.')
 
 
 class GetRandomNumberChallenge(BleCommand):

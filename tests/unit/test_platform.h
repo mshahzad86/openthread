@@ -43,6 +43,7 @@
 #include <openthread/platform/misc.h>
 #include <openthread/platform/multipan.h>
 #include <openthread/platform/radio.h>
+#include <openthread/platform/tcp.h>
 #include <openthread/platform/trel.h>
 
 #include "common/code_utils.hpp"
@@ -56,5 +57,18 @@ ot::Instance *testResetInstance(ot::Instance *aInstance);
 ot::Instance *testInitAdditionalInstance(uint8_t id);
 #endif
 void testFreeInstance(otInstance *aInstance);
+
+#if OPENTHREAD_CONFIG_BLE_TCAT_ENABLE
+#include <openthread/tcat.h>
+#ifdef __cplusplus
+extern "C" {
+#endif
+extern uint8_t  sPlatBleLastAdvSetData[OT_TCAT_ADVERTISEMENT_MAX_LEN];
+extern uint16_t sPlatBleLastAdvSetDataLen;
+extern bool     sPlatBleAdvertising;
+#ifdef __cplusplus
+}
+#endif
+#endif
 
 #endif // OT_UNIT_TEST_PLATFORM_H_

@@ -31,12 +31,13 @@
 
 #include "openthread-core-config.h"
 
-#if OPENTHREAD_CONFIG_WAKEUP_COORDINATOR_ENABLE
+#if OPENTHREAD_CONFIG_TD_WAKE_INITIATOR_ENABLE
 
 #include "common/locator.hpp"
 #include "common/non_copyable.hpp"
 #include "common/timer.hpp"
 #include "mac/mac.hpp"
+#include "radio/radio.hpp"
 
 namespace ot {
 
@@ -48,6 +49,7 @@ class Child;
 class WakeupTxScheduler : public InstanceLocator, private NonCopyable
 {
     friend class Mac::Mac;
+    friend class Radio::Callbacks;
 
 public:
     /**
@@ -95,24 +97,22 @@ public:
     void Stop(void);
 
     /**
-     * Updates the value of `mTxRequestAheadTimeUs`, based on bus speed, bus latency and `Mac::kCslRequestAhead`.
-     */
-    void UpdateFrameRequestAhead(void);
-
-    /**
      * Returns the wake-up request.
      */
     const Mac::WakeupRequest &GetWakeupRequest(void) const { return mWakeupRequest; }
 
 private:
-    constexpr static uint8_t  kConnectionRetryInterval = OPENTHREAD_CONFIG_WAKEUP_COORDINATOR_CONNECTION_RETRY_INTERVAL;
-    constexpr static uint8_t  kConnectionRetryCount    = OPENTHREAD_CONFIG_WAKEUP_COORDINATOR_CONNECTION_RETRY_COUNT;
-    constexpr static uint32_t kWakeupFrameLength       = 54; // Includes SHR
-    constexpr static bool     kWakeupFrameTxCca        = OPENTHREAD_CONFIG_WAKEUP_FRAME_TX_CCA_ENABLE;
-    constexpr static uint32_t kParentRequestLength     = 78; // Includes SHR
+    static constexpr uint8_t  kConnectionRetryInterval = 1;
+    static constexpr uint8_t  kConnectionRetryCount    = 12;
+    static constexpr uint32_t kWakeupFrameLength       = 54; // Includes SHR
+    static constexpr bool     kWakeupFrameTxCca        = true;
+    static constexpr uint32_t kParentRequestLength     = 78; // Includes SHR
 
     // Called by the MAC layer when a wake-up frame transmission is about to be started.
     Mac::TxFrame *PrepareWakeupFrame(Mac::TxFrames &aTxFrames);
+
+    // Callback from `Radio`
+    void HandleRadioBusLatencyChanged(void);
 
     // Called at the beginning of a wake-up sequence and right after a wake-up frame has been prepared for transmission.
     void ScheduleTimer(void);
@@ -132,6 +132,6 @@ private:
 
 } // namespace ot
 
-#endif // OPENTHREAD_CONFIG_WAKEUP_COORDINATOR_ENABLE
+#endif // OPENTHREAD_CONFIG_TD_WAKE_INITIATOR_ENABLE
 
 #endif // OT_CORE_MAC_WAKEUP_TX_SCHEDULER_HPP_

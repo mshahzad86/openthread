@@ -298,7 +298,7 @@ NcpBase::NcpBase(Instance *aInstance)
 #if OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
     , mAllowLocalServerDataChange(false)
 #endif
-#if OPENTHREAD_FTD
+#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
     , mPreferredRouteId(0)
 #endif
     , mCurCommandIid(0)
@@ -1709,8 +1709,8 @@ template <> otError NcpBase::HandlePropertySet<SPINEL_PROP_MAC_RX_AT>(void)
     SuccessOrExit(error = mDecoder.ReadUint8(channel));
 
     {
-        uint64_t now = otPlatRadioGetNow(mInstance);
-        uint32_t start;
+        otRadioTime64 now = otPlatRadioGetNow(mInstance);
+        uint32_t      start;
 
         VerifyOrExit(when > now && (when - now) < UINT32_MAX, error = OT_ERROR_INVALID_ARGS);
 
@@ -2149,10 +2149,6 @@ template <> otError NcpBase::HandlePropertyGet<SPINEL_PROP_CAPS>(void)
 
 #if OPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE
     SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_THREAD_LINK_METRICS));
-#endif
-
-#if OPENTHREAD_CONFIG_DUA_ENABLE
-    SuccessOrExit(error = mEncoder.WriteUintPacked(SPINEL_CAP_DUA));
 #endif
 
 #if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE

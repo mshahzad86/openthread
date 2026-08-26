@@ -125,7 +125,6 @@ build_simulation()
     fi
 
     if [[ ${version} != "1.1" ]]; then
-        options+=("-DOT_DUA=ON")
         options+=("-DOT_MLR=ON")
     fi
 
@@ -139,8 +138,8 @@ build_simulation()
         options+=("-DOT_LINK_METRICS_SUBJECT=ON")
         options+=("-DOT_LINK_METRICS_MANAGER=ON")
         options+=("-DOT_P2P=ON")
-        options+=("-DOT_WAKEUP_COORDINATOR=ON")
-        options+=("-DOT_WAKEUP_END_DEVICE=ON")
+        options+=("-DOT_WAKE_INITIATOR=ON")
+        options+=("-DOT_WAKE_LISTENER=ON")
     fi
 
     if [[ ${OT_NODE_TYPE} == cli* ]]; then
@@ -184,14 +183,13 @@ build_posix()
     )
 
     if [[ ${version} != "1.1" ]]; then
-        options+=("-DOT_DUA=ON")
         options+=("-DOT_MLR=ON")
         options+=("-DOT_LINK_METRICS_INITIATOR=ON")
         options+=("-DOT_LINK_METRICS_SUBJECT=ON")
         options+=("-DOT_LINK_METRICS_MANAGER=ON")
         options+=("-DOT_P2P=ON")
-        options+=("-DOT_WAKEUP_COORDINATOR=ON")
-        options+=("-DOT_WAKEUP_END_DEVICE=ON")
+        options+=("-DOT_WAKE_INITIATOR=ON")
+        options+=("-DOT_WAKE_LISTENER=ON")
     fi
 
     if [[ ${FULL_LOGS} == 1 ]]; then
@@ -346,14 +344,12 @@ do_build_otbr_docker()
         "-DOT_ANYCAST_LOCATOR=ON"
         "-DOT_COVERAGE=ON"
         "-DOT_DNS_CLIENT=ON"
-        "-DOT_DUA=ON"
         "-DOT_MLR=ON"
         "-DOT_NETDATA_PUBLISHER=ON"
         "-DOT_SLAAC=ON"
         "-DOT_SRP_CLIENT=ON"
         "-DOT_FULL_LOGS=ON"
         "-DOT_UPTIME=ON"
-        "-DOTBR_DUA_ROUTING=ON"
         "-DOTBR_DHCP6_PD=ON"
     )
     local args=(
@@ -395,7 +391,7 @@ do_build_otbr_docker()
 
     (
         if [[ -z ${LOCAL_OTBR_DIR} ]]; then
-            ./script/git-tool clone https://github.com/openthread/ot-br-posix.git --depth 1 "${otbrdir}"
+            ./script/git-tool clone https://github.com/openthread/ot-br-posix.git --depth 1 --recurse-submodules --shallow-submodules "${otbrdir}"
         else
             rsync -r \
                 --exclude=third_party/openthread/repo \
@@ -559,7 +555,7 @@ EXAMPLES:
     $0 clean build expect
     "
 
-    exit "$1"
+    exit "${1:-0}"
 }
 
 do_prepare_coredump_upload()
@@ -753,8 +749,9 @@ main()
                 do_combine_coverage
                 ;;
             *)
-                echo
-                echo -e "${OT_COLOR_FAIL}Warning:${OT_COLOR_NONE} Ignoring: '$1'"
+                echo >&2
+                echo -e "${OT_COLOR_FAIL}Error:${OT_COLOR_NONE} Unrecognized command: '$1'" >&2
+                print_usage 1 >&2
                 ;;
         esac
         shift

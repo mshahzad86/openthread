@@ -204,14 +204,14 @@ static void Test(TestIphcVector &aVector, bool aCompress, bool aDecompress)
             VerifyOrQuit((compressedMsg = sInstance->Get<MessagePool>().Allocate(Message::kTypeIp6)) != nullptr);
             SuccessOrQuit(compressedMsg->AppendBytes(result, compressBytes));
 
-            ecn = sLowpan->DecompressEcn(*compressedMsg, /* aOffset */ 0);
+            ecn = Lowpan::Lowpan::DecompressEcn(*compressedMsg, /* aOffset */ 0);
             VerifyOrQuit(ecn == aVector.GetIpHeader().GetEcn());
             printf("Decompressed ECN is %d\n", ecn);
 
             if (ecn != Ip6::kEcnNotCapable)
             {
-                sLowpan->MarkCompressedEcn(*compressedMsg, /*a aOffset */ 0);
-                ecn = sLowpan->DecompressEcn(*compressedMsg, /* aOffset */ 0);
+                Lowpan::Lowpan::MarkCompressedEcn(*compressedMsg, /* aOffset */ 0);
+                ecn = Lowpan::Lowpan::DecompressEcn(*compressedMsg, /* aOffset */ 0);
                 VerifyOrQuit(ecn == Ip6::kEcnMarked);
                 printf("ECN is updated to %d\n", ecn);
             }
@@ -1856,12 +1856,9 @@ void TestLowpanIphc(void)
 
 void TestLowpanMeshHeader(void)
 {
-    enum
-    {
-        kMaxFrameSize = 127,
-        kSourceAddr   = 0x100,
-        kDestAddr     = 0x200,
-    };
+    static constexpr uint16_t kMaxFrameSize = 127;
+    static constexpr uint16_t kSourceAddr   = 0x100;
+    static constexpr uint16_t kDestAddr     = 0x200;
 
     const uint8_t kMeshHeader1[] = {0xb1, 0x01, 0x00, 0x02, 0x00};       // src:0x100, dest:0x200, hop:0x1
     const uint8_t kMeshHeader2[] = {0xbf, 0x20, 0x01, 0x00, 0x02, 0x00}; // src:0x100, dest:0x200, hop:0x20
