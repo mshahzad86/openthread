@@ -36,6 +36,7 @@
 #if OPENTHREAD_FTD && OPENTHREAD_CONFIG_COMMISSIONER_ENABLE
 
 #include "instance/instance.hpp"
+#include "thread/device_assignment.hpp"
 
 namespace ot {
 namespace MeshCoP {
@@ -55,6 +56,7 @@ Commissioner::Commissioner(Instance &aInstance)
     , mJoinerSessionTimer(aInstance)
 {
     ClearAllBytes(mJoiners);
+    ClearAllBytes(mGroupRegistry);
 
     mCommissionerAloc.InitAsThreadOriginMeshLocal();
     mCommissionerAloc.mPreferred = true;
@@ -406,6 +408,7 @@ Error Commissioner::AddJoiner(const Mac::ExtAddress *aEui64,
 {
     Error   error = kErrorNone;
     Joiner *joiner;
+    bool    isNewEntry;
 
     VerifyOrExit(mState == kStateActive, error = kErrorInvalidState);
 
@@ -419,12 +422,22 @@ Error Commissioner::AddJoiner(const Mac::ExtAddress *aEui64,
         joiner = FindJoinerEntry(aEui64);
     }
 
-    if (joiner == nullptr)
+    isNewEntry = (joiner == nullptr);
+
+    if (isNewEntry)
     {
         joiner = GetUnusedJoinerEntry();
     }
 
     VerifyOrExit(joiner != nullptr, error = kErrorNoBufs);
+
+    if (isNewEntry)
+    {
+        // A reused slot may still carry a previous occupant's group assignment;
+        // a brand-new entry always starts ungrouped.
+        joiner->mAssignedPanId = kNoAssignedPanId;
+        joiner->mLastChildExtAddress.Clear();
+    }
 
     SuccessOrExit(error = joiner->mPskd.SetFrom(aPskd));
 
@@ -443,6 +456,17 @@ Error Commissioner::AddJoiner(const Mac::ExtAddress *aEui64,
         joiner->mType = Joiner::kTypeAny;
     }
 
+    if (aEui64 != nullptr)
+    {
+        // Group lookup and PAN decision (design doc §5.1, §10.2): a wildcard `*` or
+        // `JoinerDiscerner` entry has no single EUI-64 to look up, so it's left ungrouped.
+        SuccessOrExit(error = ResolveJoinerPanId(*joiner, *aEui64));
+    }
+    else
+    {
+        joiner->mAssignedPanId = kNoAssignedPanId;
+    }
+
     joiner->mExpirationTime = TimerMilli::GetNow() + Time::SecToMsec(aTimeout);
 
     mJoinerExpirationTimer.FireAtIfEarlier(joiner->mExpirationTime);
@@ -450,6 +474,246 @@ Error Commissioner::AddJoiner(const Mac::ExtAddress *aEui64,
     SendCommissionerSet();
 
     LogJoinerEntry("Added", *joiner);
+
+exit:
+    return error;
+}
+
+Error Commissioner::ResolveJoinerPanId(Joiner &aJoiner, const Mac::ExtAddress &aEui64)
+{
+    Error    error              = kErrorNone;
+    uint16_t previousPanId      = aJoiner.mAssignedPanId;
+    bool     wasAlreadyAssigned = (previousPanId != kNoAssignedPanId);
+    uint8_t  groupId            = FindGroupId(aEui64);
+    uint16_t newPanId           = kNoAssignedPanId;
+
+    if (groupId != kUnboundGroupId)
+    {
+        KeyManager             &keyMgr  = Get<KeyManager>();
+        const PanIdAssignment  *binding = keyMgr.FindGroupBinding(groupId);
+
+        if (binding != nullptr)
+        {
+            // Group already has a bound PAN (a prior member seeded it) - reuse it.
+            newPanId = binding->mPanId;
+        }
+        else
+        {
+            // First member of this group: allocate from the same round-robin pool used
+            // for ungrouped devices, then tag the chosen entry with this group.
+            const PanIdAssignment *fresh =
+                AllocateNextPanId(keyMgr.GetPanIdPool(), keyMgr.GetPanIdPoolSize(), Get<ChildTable>());
+
+            // Fail closed on pool exhaustion for a brand-new group (design doc §8.2),
+            // rather than silently falling back to the router's own PAN.
+            VerifyOrExit(fresh != nullptr, error = kErrorNoBufs);
+
+            IgnoreError(keyMgr.BindPanIdToGroup(fresh->mPanId, groupId));
+            newPanId = fresh->mPanId;
+        }
+    }
+    // else: not in the Group Registry - leave `newPanId` at `kNoAssignedPanId`, the
+    // explicit "fall through to today's round-robin behavior" path (design doc §0.1).
+
+    aJoiner.mAssignedPanId = newPanId;
+
+    // Requirement (c): a device that already had a *different* group-assigned PAN gets
+    // force-detached so it reattaches under the new one (design doc §10.2).
+    if (wasAlreadyAssigned && (newPanId != previousPanId))
+    {
+        ForceDetachIfAttached(aJoiner);
+    }
+
+exit:
+    return error;
+}
+
+void Commissioner::ForceDetachIfAttached(Joiner &aJoiner)
+{
+    Mac::ExtAddress noChildAddress;
+
+    noChildAddress.Clear();
+
+    if (aJoiner.mLastChildExtAddress != noChildAddress)
+    {
+        Child *child = Get<ChildTable>().FindChild(aJoiner.mLastChildExtAddress, Child::kInStateValid);
+
+        if (child != nullptr)
+        {
+            Get<Mle::Mle>().RemoveNeighbor(*child);
+            LogInfo("Force-detached previously joined child following a group PAN change");
+        }
+        // If not found, the device isn't currently attached - nothing to evict. It will
+        // pick up the new `mAssignedPanId` the next time it does attach.
+    }
+
+    aJoiner.mLastChildExtAddress.Clear();
+}
+
+Commissioner::GroupMembership *Commissioner::FindGroupMembership(const Mac::ExtAddress &aEui64)
+{
+    GroupMembership *rval = nullptr;
+
+    for (GroupMembership &entry : mGroupRegistry)
+    {
+        if ((entry.mGroupId != kUnboundGroupId) && (entry.mEui64 == aEui64))
+        {
+            rval = &entry;
+            break;
+        }
+    }
+
+    return rval;
+}
+
+Commissioner::GroupMembership *Commissioner::GetUnusedGroupMembership(void)
+{
+    GroupMembership *rval = nullptr;
+
+    for (GroupMembership &entry : mGroupRegistry)
+    {
+        if (entry.mGroupId == kUnboundGroupId)
+        {
+            rval = &entry;
+            break;
+        }
+    }
+
+    return rval;
+}
+
+uint8_t Commissioner::FindGroupId(const Mac::ExtAddress &aEui64) const
+{
+    uint8_t groupId = kUnboundGroupId;
+
+    for (const GroupMembership &entry : mGroupRegistry)
+    {
+        if ((entry.mGroupId != kUnboundGroupId) && (entry.mEui64 == aEui64))
+        {
+            groupId = entry.mGroupId;
+            break;
+        }
+    }
+
+    return groupId;
+}
+
+Error Commissioner::AddGroupMember(const Mac::ExtAddress &aEui64, uint8_t aGroupId)
+{
+    Error             error = kErrorNone;
+    GroupMembership *entry;
+
+    VerifyOrExit(aGroupId != kUnboundGroupId, error = kErrorInvalidArgs);
+
+    entry = FindGroupMembership(aEui64);
+
+    if (entry == nullptr)
+    {
+        entry = GetUnusedGroupMembership();
+    }
+
+    VerifyOrExit(entry != nullptr, error = kErrorNoBufs);
+
+    entry->mEui64   = aEui64;
+    entry->mGroupId = aGroupId;
+
+exit:
+    return error;
+}
+
+Error Commissioner::RemoveGroupMember(const Mac::ExtAddress &aEui64)
+{
+    Error             error = kErrorNone;
+    GroupMembership *entry = FindGroupMembership(aEui64);
+    Joiner           *joiner;
+
+    VerifyOrExit(entry != nullptr, error = kErrorNotFound);
+
+    entry->mGroupId = kUnboundGroupId;
+
+    // If this EUI-64 already has a Joiner entry, re-resolve its PAN the same way
+    // AddJoiner() would for an EUI-64 with no registry entry, force-detaching it if that
+    // actually changes its PAN (design doc §11.1).
+    joiner = FindJoinerEntry(&aEui64);
+
+    if (joiner != nullptr)
+    {
+        IgnoreError(ResolveJoinerPanId(*joiner, aEui64));
+    }
+
+exit:
+    return error;
+}
+
+Error Commissioner::RekeyGroup(uint8_t aGroupId)
+{
+    Error                  error  = kErrorNone;
+    KeyManager             &keyMgr = Get<KeyManager>();
+    const PanIdAssignment  *oldBinding;
+    uint16_t                oldPanId;
+    const PanIdAssignment  *fresh;
+
+    VerifyOrExit(aGroupId != kUnboundGroupId, error = kErrorInvalidArgs);
+
+    oldBinding = keyMgr.FindGroupBinding(aGroupId);
+    VerifyOrExit(oldBinding != nullptr, error = kErrorNotFound);
+    oldPanId = oldBinding->mPanId;
+
+    fresh = AllocateNextPanId(keyMgr.GetPanIdPool(), keyMgr.GetPanIdPoolSize(), Get<ChildTable>());
+    VerifyOrExit(fresh != nullptr, error = kErrorNoBufs);
+
+    IgnoreError(keyMgr.BindPanIdToGroup(oldPanId, kUnboundGroupId));
+    IgnoreError(keyMgr.BindPanIdToGroup(fresh->mPanId, aGroupId));
+
+    // Move every remaining member onto the new PAN and force-detach it (design doc §11.2).
+    // A member already removed via RemoveGroupMember()/RemoveJoiner() first is no longer
+    // in `mJoiners[]` and is skipped - it has no path back onto the new key.
+    for (Joiner &joiner : mJoiners)
+    {
+        if ((joiner.mType != Joiner::kTypeUnused) && (joiner.mAssignedPanId == oldPanId))
+        {
+            joiner.mAssignedPanId = fresh->mPanId;
+            ForceDetachIfAttached(joiner);
+        }
+    }
+
+exit:
+    return error;
+}
+
+Error Commissioner::DeleteGroup(uint8_t aGroupId)
+{
+    Error                  error  = kErrorNone;
+    KeyManager             &keyMgr = Get<KeyManager>();
+    const PanIdAssignment  *binding;
+    uint16_t                targetPanId;
+
+    VerifyOrExit(aGroupId != kUnboundGroupId, error = kErrorInvalidArgs);
+
+    binding = keyMgr.FindGroupBinding(aGroupId);
+    VerifyOrExit(binding != nullptr, error = kErrorNotFound);
+    targetPanId = binding->mPanId;
+
+    IgnoreError(keyMgr.BindPanIdToGroup(targetPanId, kUnboundGroupId));
+
+    for (GroupMembership &entry : mGroupRegistry)
+    {
+        if (entry.mGroupId == aGroupId)
+        {
+            entry.mGroupId = kUnboundGroupId;
+        }
+    }
+
+    // Disband: every affected member falls back to its own solo PAN, same as an EUI-64
+    // that was never grouped, and is force-detached to pick it up (design doc §11.3).
+    for (Joiner &joiner : mJoiners)
+    {
+        if ((joiner.mType != Joiner::kTypeUnused) && (joiner.mAssignedPanId == targetPanId))
+        {
+            joiner.mAssignedPanId = kNoAssignedPanId;
+            ForceDetachIfAttached(joiner);
+        }
+    }
 
 exit:
     return error;

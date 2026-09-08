@@ -111,6 +111,26 @@ otError otCommissionerRemoveJoinerWithDiscerner(otInstance *aInstance, const otJ
     return AsCoreType(aInstance).Get<MeshCoP::Commissioner>().RemoveJoiner(AsCoreType(aDiscerner), 0);
 }
 
+otError otCommissionerAddGroupMember(otInstance *aInstance, const otExtAddress *aEui64, uint8_t aGroupId)
+{
+    return AsCoreType(aInstance).Get<MeshCoP::Commissioner>().AddGroupMember(AsCoreType(aEui64), aGroupId);
+}
+
+otError otCommissionerRemoveGroupMember(otInstance *aInstance, const otExtAddress *aEui64)
+{
+    return AsCoreType(aInstance).Get<MeshCoP::Commissioner>().RemoveGroupMember(AsCoreType(aEui64));
+}
+
+otError otCommissionerRekeyGroup(otInstance *aInstance, uint8_t aGroupId)
+{
+    return AsCoreType(aInstance).Get<MeshCoP::Commissioner>().RekeyGroup(aGroupId);
+}
+
+otError otCommissionerDeleteGroup(otInstance *aInstance, uint8_t aGroupId)
+{
+    return AsCoreType(aInstance).Get<MeshCoP::Commissioner>().DeleteGroup(aGroupId);
+}
+
 otError otCommissionerSetProvisioningUrl(otInstance *aInstance, const char *aProvisioningUrl)
 {
     return AsCoreType(aInstance).Get<MeshCoP::Commissioner>().SetProvisioningUrl(aProvisioningUrl);

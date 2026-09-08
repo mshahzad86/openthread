@@ -27,6 +27,22 @@ inline const PanIdAssignment *FindPanIdAssignment(const PanIdAssignment *aPool, 
     return nullptr;
 }
 
+// Finds the pool entry already bound to a given (non-zero) Commissioner Group ID, if any.
+// Mirrors `FindPanIdAssignment()` above - used to reuse a group's already-allocated
+// PAN/Network Key for every member after the first.
+inline const PanIdAssignment *FindGroupBinding(const PanIdAssignment *aPool, uint8_t aPoolSize, uint8_t aGroupId)
+{
+    for (uint8_t i = 0; (aGroupId != kUnboundGroupId) && (i < aPoolSize); i++)
+    {
+        if (aPool[i].mGroupId == aGroupId)
+        {
+            return &aPool[i];
+        }
+    }
+
+    return nullptr;
+}
+
 #if OPENTHREAD_FTD
 
 inline const PanIdAssignment *AllocateNextPanId(const PanIdAssignment *aPool,

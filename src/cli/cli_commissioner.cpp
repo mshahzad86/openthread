@@ -120,6 +120,90 @@ exit:
     return error;
 }
 
+/**
+ * @cli commissioner group add
+ * @code
+ * commissioner group add f4ce36acc9eebde9 5
+ * Done
+ * @endcode
+ * @cparam commissioner group add @ca{eui64} @ca{groupid}
+ *   * `eui64`: IEEE EUI-64 of the device.
+ *   * `groupid`: Non-zero Group ID to assign it to.
+ * @par
+ * Maps a device's EUI-64 to a group in the preconfigured Group Registry. A later
+ * `commissioner joiner add` for this EUI-64 reuses the group's PAN/Network Key
+ * (allocating one on the first member seen) instead of the usual round-robin PAN.
+ * @sa otCommissionerAddGroupMember
+ *
+ * @cli commissioner group remove
+ * @code
+ * commissioner group remove f4ce36acc9eebde9
+ * Done
+ * @endcode
+ * @cparam commissioner group remove @ca{eui64}
+ * @par
+ * Un-maps a device from its group. It falls back to the plain per-device round-robin
+ * PAN; the rest of the group is unaffected.
+ * @sa otCommissionerRemoveGroupMember
+ *
+ * @cli commissioner group rekey
+ * @code
+ * commissioner group rekey 5
+ * Done
+ * @endcode
+ * @cparam commissioner group rekey @ca{groupid}
+ * @par
+ * Allocates a fresh PAN/Network Key for the group and moves every current member onto
+ * it, force-detaching each one that is currently attached.
+ * @sa otCommissionerRekeyGroup
+ *
+ * @cli commissioner group delete
+ * @code
+ * commissioner group delete 5
+ * Done
+ * @endcode
+ * @cparam commissioner group delete @ca{groupid}
+ * @par
+ * Disbands the group. Every member falls back to its own solo PAN and is
+ * force-detached to pick it up.
+ * @sa otCommissionerDeleteGroup
+ */
+template <> otError Commissioner::Process<Cmd("group")>(Arg aArgs[])
+{
+    otError      error = OT_ERROR_NONE;
+    otExtAddress addr;
+    uint8_t      groupId;
+
+    if (aArgs[0] == "add")
+    {
+        SuccessOrExit(error = aArgs[1].ParseAsHexString(addr.m8));
+        SuccessOrExit(error = aArgs[2].ParseAsUint8(groupId));
+        error = otCommissionerAddGroupMember(GetInstancePtr(), &addr, groupId);
+    }
+    else if (aArgs[0] == "remove")
+    {
+        SuccessOrExit(error = aArgs[1].ParseAsHexString(addr.m8));
+        error = otCommissionerRemoveGroupMember(GetInstancePtr(), &addr);
+    }
+    else if (aArgs[0] == "rekey")
+    {
+        SuccessOrExit(error = aArgs[1].ParseAsUint8(groupId));
+        error = otCommissionerRekeyGroup(GetInstancePtr(), groupId);
+    }
+    else if (aArgs[0] == "delete")
+    {
+        SuccessOrExit(error = aArgs[1].ParseAsUint8(groupId));
+        error = otCommissionerDeleteGroup(GetInstancePtr(), groupId);
+    }
+    else
+    {
+        error = OT_ERROR_INVALID_ARGS;
+    }
+
+exit:
+    return error;
+}
+
 template <> otError Commissioner::Process<Cmd("joiner")>(Arg aArgs[])
 {
     otError             error = OT_ERROR_NONE;
@@ -659,9 +743,10 @@ otError Commissioner::Process(Arg aArgs[])
 #define CmdEntry(aCommandString) {aCommandString, &Commissioner::Process<Cmd(aCommandString)>}
 
     static constexpr Command kCommands[] = {
-        CmdEntry("announce"),  CmdEntry("energy"),  CmdEntry("id"),    CmdEntry("joiner"),
-        CmdEntry("mgmtget"),   CmdEntry("mgmtset"), CmdEntry("panid"), CmdEntry("provisioningurl"),
-        CmdEntry("sessionid"), CmdEntry("start"),   CmdEntry("state"), CmdEntry("stop"),
+        CmdEntry("announce"), CmdEntry("energy"),         CmdEntry("group"),  CmdEntry("id"),
+        CmdEntry("joiner"),   CmdEntry("mgmtget"),        CmdEntry("mgmtset"), CmdEntry("panid"),
+        CmdEntry("provisioningurl"), CmdEntry("sessionid"), CmdEntry("start"), CmdEntry("state"),
+        CmdEntry("stop"),
     };
 
 #undef CmdEntry

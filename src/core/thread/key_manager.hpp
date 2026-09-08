@@ -600,6 +600,40 @@ public:
     uint8_t                GetPanIdPoolSize(void) const { return mPanIdPoolSize; }
 
     /**
+     * Finds the PAN ID pool entry already bound to a Commissioner group, if any.
+     *
+     * @param[in] aGroupId  The Commissioner Group ID to look up.
+     *
+     * @returns A pointer to the bound pool entry, or `nullptr` if no entry is bound to @p aGroupId.
+     */
+    const PanIdAssignment *FindGroupBinding(uint8_t aGroupId) const
+    {
+        const PanIdAssignment *rval = nullptr;
+
+        for (uint8_t i = 0; (aGroupId != kUnboundGroupId) && (i < mPanIdPoolSize); i++)
+        {
+            if (mPanIdPool[i].mGroupId == aGroupId)
+            {
+                rval = &mPanIdPool[i];
+                break;
+            }
+        }
+
+        return rval;
+    }
+
+    /**
+     * Tags (or untags, with `kUnboundGroupId`) a pool entry with a Commissioner Group ID.
+     *
+     * @param[in] aPanId    The PAN ID of the pool entry to tag.
+     * @param[in] aGroupId  The Group ID to bind, or `kUnboundGroupId` to free the entry.
+     *
+     * @retval kErrorNone      Successfully updated the entry's Group ID tag.
+     * @retval kErrorNotFound  No pool entry has PAN ID @p aPanId.
+     */
+    Error BindPanIdToGroup(uint16_t aPanId, uint8_t aGroupId);
+
+    /**
      * Handles MAC frame counter changes (callback from `SubMac` for 15.4 security frame change).
      *
      * This is called to indicate the @p aMacFrameCounter value is now used.
