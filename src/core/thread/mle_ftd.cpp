@@ -2960,6 +2960,14 @@ Error Mle::SendChildIdResponse(Child &aChild)
     destination.InitAsLinkLocalAddress(aChild.GetExtAddress());
     SuccessOrExit(error = message->SendTo(destination));
 
+#if OPENTHREAD_CONFIG_COMMISSIONER_ENABLE
+    // Bookkeeping only - lets a later group/PAN change find and evict this child by the
+    // Extended Address it actually attached with (group-PAN design §10.1). Commissioning
+    // is still in progress for `mActiveJoiner` at this exact point, and `aChild` is already
+    // in hand, so no new lookup is needed.
+    Get<MeshCoP::Commissioner>().RecordActiveJoinerChildAddress(aChild.GetExtAddress());
+#endif
+
     SetChildStateToValid(aChild);
 
     Log(kMessageSend, kTypeChildIdResponse, destination, aChild.GetRloc16());

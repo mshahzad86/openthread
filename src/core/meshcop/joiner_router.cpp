@@ -267,7 +267,23 @@ exit:
 
 uint16_t JoinerRouter::GetOrAllocateNextPanId(void)
 {
-    if (!mHasPendingPanId)
+    bool groupAssigned = false;
+
+#if OPENTHREAD_CONFIG_COMMISSIONER_ENABLE
+    // The PAN may already have been decided at `commissioner joiner add` time, if this
+    // joiner's EUI-64 is in the Commissioner's Group Registry (group-PAN design §5.2).
+    // When that's the case, use it directly and skip the round-robin allocator entirely.
+    uint16_t groupPanId = Get<Commissioner>().GetActiveJoinerAssignedPanId();
+
+    if (groupPanId != Commissioner::kNoAssignedPanId)
+    {
+        mPendingPanId.mPanId = groupPanId;
+        mHasPendingPanId     = true;
+        groupAssigned        = true;
+    }
+#endif
+
+    if (!groupAssigned && !mHasPendingPanId)
     {
         KeyManager            &keyMgr     = Get<KeyManager>();
         const PanIdAssignment *assignment = AllocateNextPanId(keyMgr.GetPanIdPool(),

@@ -390,15 +390,34 @@ void KeyManager::BuildPanIdPool(void)
     {
         mPanIdPool[mPanIdPoolSize].mPanId = mPanIds[i];
         memcpy(mPanIdPool[mPanIdPoolSize].mNetworkKey, mPanKeys[i].m8, NetworkKey::kSize);
+        mPanIdPool[mPanIdPoolSize].mGroupId = kUnboundGroupId;
         mPanIdPoolSize++;
     }
 
     mPanIdPool[mPanIdPoolSize].mPanId = Get<Mac::Mac>().GetPanId();
     memcpy(mPanIdPool[mPanIdPoolSize].mNetworkKey, mNetworkKey.m8, NetworkKey::kSize);
+    mPanIdPool[mPanIdPoolSize].mGroupId = kUnboundGroupId;
     mPanIdPoolSize++;
 
     LogWarn("PanIdPool built: %u entries (%u joiner PANs + router PAN 0x%04x last)",
             mPanIdPoolSize, mPanIdPoolSize - 1, mPanIdPool[mPanIdPoolSize - 1].mPanId);
+}
+
+Error KeyManager::BindPanIdToGroup(uint16_t aPanId, uint8_t aGroupId)
+{
+    Error error = kErrorNotFound;
+
+    for (uint8_t i = 0; i < mPanIdPoolSize; i++)
+    {
+        if (mPanIdPool[i].mPanId == aPanId)
+        {
+            mPanIdPool[i].mGroupId = aGroupId;
+            error                  = kErrorNone;
+            break;
+        }
+    }
+
+    return error;
 }
 
 void KeyManager::UpdateKeyMaterial(void)
