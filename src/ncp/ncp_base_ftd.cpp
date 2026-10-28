@@ -79,6 +79,9 @@ otError NcpBase::EncodeChildInfo(const otChildInfo &aChildInfo)
     SuccessOrExit(error = mEncoder.WriteInt8(aChildInfo.mAverageRssi));
     SuccessOrExit(error = mEncoder.WriteUint8(modeFlags));
     SuccessOrExit(error = mEncoder.WriteInt8(aChildInfo.mLastRssi));
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    SuccessOrExit(error = mEncoder.WriteUint16(aChildInfo.mPanId));
+#endif
 
 exit:
     return error;

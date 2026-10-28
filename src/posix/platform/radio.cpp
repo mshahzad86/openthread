@@ -972,6 +972,19 @@ void otPlatRadioSetMacKey(otInstance             *aInstance,
     OT_UNUSED_VARIABLE(aKeyType);
 }
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+void otPlatRadioSetMacKeyMultiPan(otInstance               *aInstance,
+                                  uint8_t                   aKeyIdMode,
+                                  uint8_t                   aKeyIndex,
+                                  const otPanIdKeyMaterial *aPanIdKeyMaterials,
+                                  otRadioKeyType            aKeyType)
+{
+    SuccessOrDie(GetRadioSpinel().SetMacKeyMultiPan(aKeyIdMode, aKeyIndex, aPanIdKeyMaterials));
+    OT_UNUSED_VARIABLE(aInstance);
+    OT_UNUSED_VARIABLE(aKeyType);
+}
+#endif
+
 void otPlatRadioSetMacFrameCounter(otInstance *aInstance, uint32_t aMacFrameCounter)
 {
     SuccessOrDie(GetRadioSpinel().SetMacFrameCounter(aMacFrameCounter, /* aSetIfLarger */ false));

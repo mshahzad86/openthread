@@ -438,7 +438,12 @@
  *  The maximum size of SPINEL frame.
  */
 #ifndef SPINEL_FRAME_MAX_SIZE
+#if defined(OPENTHREAD_CONFIG_MULTI_PAN_ENABLE) && OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+// Multi-PAN sends the whole PAN key map (`SPINEL_PROP_RCP_MAC_KEY_MULTIPAN`) in one frame.
+#define SPINEL_FRAME_MAX_SIZE 4096
+#else
 #define SPINEL_FRAME_MAX_SIZE 1300
+#endif
 #endif
 
 /**
@@ -5202,6 +5207,27 @@ enum
     SPINEL_PROP_DEBUG_TREL_TEST_MODE_ENABLE = SPINEL_PROP_DEBUG__BEGIN + 4,
 
     SPINEL_PROP_DEBUG__END = 0x4400,
+
+    SPINEL_PROP_DEBUG_MULTIPAN_BEGIN = 0x4400,
+
+    /// Multi-PAN MAC Key Map
+    /** Format: `CC` followed by `OT_RADIO_MULTI_PAN_MAX_KEYS` (64) times `Sddd` - Write only
+     *
+     *  `C`: MAC key ID mode (ignored, Key ID Mode 1 is assumed)
+     *  `C`: MAC key index
+     *  For each entry (entry 0 is the host's own PAN, entries with PAN ID zero are unused):
+     *    `S`: PAN ID
+     *    `d`: previous MAC key
+     *    `d`: current MAC key
+     *    `d`: next MAC key
+     *
+     * Sets the Multi-PAN map of PAN IDs to MAC keys on the RCP. The whole map is sent in one frame, so the
+     * frame size limit must be at least 3.6 KB (`SPINEL_FRAME_MAX_SIZE` is raised to 4096 with
+     * `OPENTHREAD_CONFIG_MULTI_PAN_ENABLE`).
+     */
+    SPINEL_PROP_RCP_MAC_KEY_MULTIPAN = SPINEL_PROP_DEBUG_MULTIPAN_BEGIN + 0,
+
+    SPINEL_PROP_DEBUG_MULTIPAN_END = 0x4500,
 
     SPINEL_PROP_EXPERIMENTAL__BEGIN = 2000000,
     SPINEL_PROP_EXPERIMENTAL__END   = 2097152,

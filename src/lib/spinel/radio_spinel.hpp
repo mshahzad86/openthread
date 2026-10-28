@@ -729,6 +729,25 @@ public:
                       const otMacKeyMaterial *aCurrKey,
                       const otMacKeyMaterial *aNextKey);
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    /**
+     * Sets the Multi-PAN map of PAN IDs to MAC keys, and the key index, to RCP.
+     *
+     * Sent as one `SPINEL_PROP_RCP_MAC_KEY_MULTIPAN` property (requires a `SPINEL_FRAME_MAX_SIZE` of at least
+     * `kMultiPanKeyMapSize` plus the frame header).
+     *
+     * @param[in] aKeyIdMode          The key ID mode.
+     * @param[in] aKeyIndex           The key index.
+     * @param[in] aPanIdKeyMaterials  The map (`OT_RADIO_MULTI_PAN_MAX_KEYS` entries).
+     *
+     * @retval  OT_ERROR_NONE               Succeeded.
+     * @retval  OT_ERROR_INVALID_ARGS       One of the keys passed is invalid.
+     * @retval  OT_ERROR_BUSY               Failed due to another operation is on going.
+     * @retval  OT_ERROR_RESPONSE_TIMEOUT   Failed due to no response received from the transceiver.
+     */
+    otError SetMacKeyMultiPan(uint8_t aKeyIdMode, uint8_t aKeyIndex, const otPanIdKeyMaterial *aPanIdKeyMaterials);
+#endif
+
     /**
      * Sets the current MAC Frame Counter value.
      *
@@ -1202,6 +1221,14 @@ private:
                       const otMacKey &aPrevKey,
                       const otMacKey &aCurrKey,
                       const otMacKey &NextKey);
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    // Encoded `SPINEL_PROP_RCP_MAC_KEY_MULTIPAN` key map: for each entry,
+    // PAN ID (`S`) then previous, current and next key (`d` each).
+    static constexpr uint16_t kMultiPanKeyEntrySize = sizeof(uint16_t) + 3 * (sizeof(uint16_t) + sizeof(otMacKey));
+    static constexpr uint16_t kMultiPanKeyMapSize   = OT_RADIO_MULTI_PAN_MAX_KEYS * kMultiPanKeyEntrySize;
+
+    otError SendMacKeyMultiPan(uint8_t aKeyIdMode, uint8_t aKeyIndex, const uint8_t *aKeyMap);
+#endif
 #if OPENTHREAD_CONFIG_PLATFORM_KEY_REFERENCES_ENABLE
     static otError ReadMacKey(const otMacKeyMaterial &aKeyMaterial, otMacKey &aKey);
 #endif
@@ -1326,7 +1353,11 @@ private:
     bool         mSrcMatchEnabled : 1;
     bool         mRcpRestorationEnabled : 1;
 
-    bool mMacKeySet : 1;                   ///< Whether MAC key has been set.
+    bool mMacKeySet : 1; ///< Whether MAC key has been set.
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    bool    mMultiPanKeySet : 1;                  ///< Whether the Multi-PAN key map has been set.
+    uint8_t mMultiPanKeyMap[kMultiPanKeyMapSize]; ///< Encoded Multi-PAN key map (kept for RCP restoration).
+#endif
     bool mCcaEnergyDetectThresholdSet : 1; ///< Whether CCA energy detect threshold has been set.
     bool mTransmitPowerSet : 1;            ///< Whether transmit power has been set.
     bool mMaxPowerTableSet : 1;            ///< Whether any channel's max transmit power has been set.

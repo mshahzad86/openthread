@@ -93,6 +93,9 @@ RadioSpinel::RadioSpinel(void)
     , mSrcMatchEnabled(false)
     , mRcpRestorationEnabled(true)
     , mMacKeySet(false)
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE && OPENTHREAD_SPINEL_CONFIG_RCP_RESTORATION_MAX_COUNT > 0
+    , mMultiPanKeySet(false)
+#endif
     , mCcaEnergyDetectThresholdSet(false)
     , mTransmitPowerSet(false)
     , mMaxPowerTableSet(false)
@@ -932,6 +935,83 @@ otError RadioSpinel::SetMacKey(uint8_t         aKeyIdMode,
 exit:
     return error;
 }
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+otError RadioSpinel::SetMacKeyMultiPan(uint8_t                   aKeyIdMode,
+                                       uint8_t                   aKeyIndex,
+                                       const otPanIdKeyMaterial *aPanIdKeyMaterials)
+{
+    // The map is sent with the same bytes as `CC` followed by
+    // `OT_RADIO_MULTI_PAN_MAX_KEYS` times `Sddd` (PAN ID, previous,
+    // current and next key), which is what the RCP decodes.
+
+    static_assert(kMultiPanKeyMapSize + 16 <= SPINEL_FRAME_MAX_SIZE,
+                  "SPINEL_FRAME_MAX_SIZE is too small for SPINEL_PROP_RCP_MAC_KEY_MULTIPAN");
+
+    otError error = OT_ERROR_NONE;
+#if OPENTHREAD_SPINEL_CONFIG_RCP_RESTORATION_MAX_COUNT > 0
+    uint8_t *keyMap = mMultiPanKeyMap;
+#else
+    uint8_t  buffer[kMultiPanKeyMapSize];
+    uint8_t *keyMap = buffer;
+#endif
+    uint8_t *cur = keyMap;
+
+    for (uint8_t i = 0; i < OT_RADIO_MULTI_PAN_MAX_KEYS; i++)
+    {
+        const otPanIdKeyMaterial &entry   = aPanIdKeyMaterials[i];
+        const otMacKeyMaterial   *keys[3] = {&entry.prevMacKey, &entry.curMacKey, &entry.nextMacKey};
+
+        *cur++ = static_cast<uint8_t>(entry.panId & 0xff);
+        *cur++ = static_cast<uint8_t>(entry.panId >> 8);
+
+        for (const otMacKeyMaterial *keyMaterial : keys)
+        {
+            otMacKey key;
+
+#if OPENTHREAD_CONFIG_PLATFORM_KEY_REFERENCES_ENABLE
+            if (entry.panId == 0)
+            {
+                memset(&key, 0, sizeof(key));
+            }
+            else
+            {
+                SuccessOrExit(error = ReadMacKey(*keyMaterial, key));
+            }
+#else
+            key = keyMaterial->mKeyMaterial.mKey;
+#endif
+
+            *cur++ = static_cast<uint8_t>(sizeof(otMacKey));
+            *cur++ = 0;
+            memcpy(cur, key.m8, sizeof(otMacKey));
+            cur += sizeof(otMacKey);
+        }
+    }
+
+    SuccessOrExit(error = SendMacKeyMultiPan(aKeyIdMode, aKeyIndex, keyMap));
+
+#if OPENTHREAD_SPINEL_CONFIG_RCP_RESTORATION_MAX_COUNT > 0
+    mKeyIdMode      = aKeyIdMode;
+    mKeyIndex       = aKeyIndex;
+    mMultiPanKeySet = true;
+#endif
+
+exit:
+    if (error != OT_ERROR_NONE)
+    {
+        LogWarn("Failed to set Multi-PAN MAC keys: %s", otThreadErrorToString(error));
+    }
+
+    return error;
+}
+
+otError RadioSpinel::SendMacKeyMultiPan(uint8_t aKeyIdMode, uint8_t aKeyIndex, const uint8_t *aKeyMap)
+{
+    return Set(SPINEL_PROP_RCP_MAC_KEY_MULTIPAN, SPINEL_DATATYPE_UINT8_S SPINEL_DATATYPE_UINT8_S SPINEL_DATATYPE_DATA_S,
+               aKeyIdMode, aKeyIndex, aKeyMap, static_cast<uint16_t>(kMultiPanKeyMapSize));
+}
+#endif // OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
 
 otError RadioSpinel::SetMacFrameCounter(uint32_t aMacFrameCounter, bool aSetIfLarger)
 {
@@ -2219,6 +2299,13 @@ void RadioSpinel::RestoreProperties(void)
                          mKeyIdMode, mKeyIndex, mPrevKey.m8, sizeof(otMacKey), mCurrKey.m8, sizeof(otMacKey),
                          mNextKey.m8, sizeof(otMacKey)));
     }
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    if (mMultiPanKeySet)
+    {
+        SuccessOrDie(SendMacKeyMultiPan(mKeyIdMode, mKeyIndex, mMultiPanKeyMap));
+    }
+#endif
 
     if (mMacFrameCounterSet)
     {
