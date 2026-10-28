@@ -35,6 +35,7 @@
 #if OPENTHREAD_FTD
 
 #include "instance/instance.hpp"
+#include "thread/device_assignment.hpp"
 
 namespace ot {
 namespace Mle {
@@ -1581,6 +1582,12 @@ void Mle::HandleParentRequest(RxInfo &aRxInfo)
         VerifyOrExit(durSinceLastHeard >= kParentRequestDuplicateTimeout, error = kErrorDuplicated);
     }
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    // Multi-PAN: the child is on the PAN its Parent Request was sent
+    // to. A re-attaching child may be on a different PAN than before.
+    child->SetPanId(aRxInfo.mMessage.GetPanId());
+#endif
+
     if (!child->IsStateValidOrRestoring())
     {
         child->SetLastHeard(TimerMilli::GetNow());
@@ -2776,10 +2783,16 @@ exit:
 
 Error Mle::SendDiscoveryResponse(const Ip6::Address &aDestination, const DiscoveryResponseInfo &aInfo)
 {
-    Error                              error = kErrorNone;
-    TxMessage                         *message;
+    Error                              error   = kErrorNone;
+    TxMessage                         *message = nullptr;
     Tlv::Bookmark                      tlvBookmark;
     MeshCoP::DiscoveryResponseTlvValue discoveryResponseTlvValue;
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    // The joiner keeps the PAN it learns from this response, so decide
+    // it exactly once here and let the frame builder read the decision.
+    SuccessOrExit(error = Get<MeshCoP::JoinerRouter>().SelectPanIdForDiscovery());
+#endif
 
     VerifyOrExit((message = NewMleMessage(kCommandDiscoveryResponse)) != nullptr, error = kErrorNoBufs);
     message->SetDirectTransmission();
@@ -2871,7 +2884,11 @@ Error Mle::SendChildIdResponse(Child &aChild)
             break;
 
         case Tlv::kActiveDataset:
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+            SuccessOrExit(error = AppendMultiPanActiveDatasetTlv(*message, aChild));
+#else
             SuccessOrExit(error = message->AppendActiveDatasetTlv());
+#endif
             break;
 
         case Tlv::kPendingDataset:
@@ -2907,6 +2924,12 @@ Error Mle::SendChildIdResponse(Child &aChild)
     destination.InitAsLinkLocalAddress(aChild.GetExtAddress());
     SuccessOrExit(error = message->SendTo(destination));
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE && OPENTHREAD_CONFIG_COMMISSIONER_ENABLE
+    // Bookkeeping only: lets a later group/PAN change find and evict
+    // this child by the Extended Address it actually attached with.
+    Get<MeshCoP::Commissioner>().RecordFinalizedJoinerChildAddress(aChild.GetExtAddress(), aChild.GetPanId());
+#endif
+
     SetChildStateToValid(aChild);
 
     Log(kMessageSend, kTypeChildIdResponse, destination, aChild.GetRloc16());
@@ -2915,6 +2938,64 @@ exit:
     FreeMessageOnError(message, error);
     return error;
 }
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+Error Mle::AppendMultiPanActiveDatasetTlv(TxMessage &aMessage, Child &aChild)
+{
+    // Appends the Active Dataset with the PAN ID and Network Key of
+    // the PAN assigned to `aChild` (Multi-PAN).
+
+    Error                  error      = kErrorNone;
+    KeyManager            &keyManager = Get<KeyManager>();
+    const PanIdAssignment *assignment;
+    uint16_t               pendingPanId;
+    MeshCoP::Dataset       dataset;
+
+    // The PAN the child attached with (taken from its Parent Request
+    // frame) is the one it learned from the Discovery Response, so it
+    // is authoritative.
+    assignment = FindPanIdAssignment(keyManager.GetPanIdPool(), keyManager.GetPanIdPoolSize(), aChild.GetPanId());
+
+    if (Get<MeshCoP::JoinerRouter>().LookupPendingPanId(pendingPanId))
+    {
+        LogMultiPan("ChildIdResponse: child PAN 0x%04x pending PAN 0x%04x (consumed)", aChild.GetPanId(), pendingPanId);
+
+        if (assignment == nullptr)
+        {
+            assignment = FindPanIdAssignment(keyManager.GetPanIdPool(), keyManager.GetPanIdPoolSize(), pendingPanId);
+        }
+    }
+
+    if (assignment == nullptr)
+    {
+        LogMultiPan("ChildIdResponse: no PAN for child 0x%04x, falling back to round-robin", aChild.GetPanId());
+        assignment = keyManager.AllocateNextPanId();
+    }
+
+    if (Get<MeshCoP::ActiveDatasetManager>().Read(dataset) != kErrorNone)
+    {
+        // No dataset, no TLV (treated as success, like `AppendActiveDatasetTlv()`).
+        ExitNow();
+    }
+
+    if (assignment != nullptr)
+    {
+        NetworkKey networkKey;
+
+        memcpy(networkKey.m8, assignment->mNetworkKey, NetworkKey::kSize);
+        SuccessOrExit(error = dataset.Write<MeshCoP::PanIdTlv>(assignment->mPanId));
+        SuccessOrExit(error = dataset.Write<MeshCoP::NetworkKeyTlv>(networkKey));
+        aChild.SetPanId(assignment->mPanId);
+        LogMultiPan("Assigned PAN 0x%04x for child", assignment->mPanId);
+    }
+
+    dataset.RemoveTimestamp(MeshCoP::Dataset::kActive);
+    error = Tlv::AppendTlv(aMessage, Tlv::kActiveDataset, dataset.GetBytes(), dataset.GetLength());
+
+exit:
+    return error;
+}
+#endif // OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
 
 Error Mle::SendChildUpdateRequestToChild(Child &aChild)
 {

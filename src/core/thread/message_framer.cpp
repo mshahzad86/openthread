@@ -34,8 +34,13 @@
 #include "message_framer.hpp"
 
 #include "instance/instance.hpp"
+#include "thread/device_assignment.hpp"
 
 namespace ot {
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+RegisterLogModule("MsgFramer");
+#endif
 
 MessageFramer::MessageFramer(Instance &aInstance)
     : InstanceLocator(aInstance)
@@ -138,7 +143,7 @@ void MessageFramer::PrepareEmptyFrame(Mac::TxFrame &aFrame, const Mac::Address &
     }
 
     buildInfo.mAddrs.mDestination = aMacDest;
-    buildInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+    buildInfo.mPanIds.SetBothSourceDestination(DeterminePanId(aMacDest, kValidNeighborOnly));
 
     buildInfo.mType          = Mac::Frame::kTypeData;
     buildInfo.mSecurityLevel = Mac::Frame::kSecurityEncMic32;
@@ -184,7 +189,7 @@ start:
         }
     }
 
-    buildInfo.mPanIds.SetBothSourceDestination(Get<Mac::Mac>().GetPanId());
+    buildInfo.mPanIds.SetBothSourceDestination(DeterminePanId(aMacAddrs.mDestination, kAnyPeer));
 
     if (aMessage.IsSubTypeMle())
     {
@@ -197,8 +202,16 @@ start:
             break;
 
         case Mle::kCommandDiscoveryRequest:
+            buildInfo.mPanIds.SetDestination(aMessage.GetPanId());
+            break;
+
         case Mle::kCommandDiscoveryResponse:
             buildInfo.mPanIds.SetDestination(aMessage.GetPanId());
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE && OPENTHREAD_FTD
+            // Multi-PAN: the source PAN tells the joiner which PAN it
+            // is assigned (decided by `SelectPanIdForDiscovery()`).
+            buildInfo.mPanIds.SetSource(Get<MeshCoP::JoinerRouter>().GetOrAllocateNextPanId());
+#endif
             break;
 
         default:
@@ -352,6 +365,70 @@ start:
     aMessage.SetOffset(origMsgOffset);
 
     return nextOffset;
+}
+
+Mac::PanId MessageFramer::DeterminePanId(const Mac::Address &aMacDest, PeerScope aScope)
+{
+    // Determines the PAN to put in a frame sent to `aMacDest`.
+    //
+    // Without Multi-PAN, this is always the router's own PAN. With
+    // Multi-PAN, a valid child uses its own PAN. With `kAnyPeer`, a
+    // peer that is not a valid neighbor (a child attaching, a joiner,
+    // or a device with a pre-configured dataset) uses the PAN it was
+    // seen on, else the PAN being handed out to the next joiner.
+
+    Mac::PanId panId = Get<Mac::Mac>().GetPanId();
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE && OPENTHREAD_FTD
+    Neighbor   *neighbor   = Get<NeighborTable>().FindNeighbor(aMacDest);
+    KeyManager &keyManager = Get<KeyManager>();
+    Child      *child;
+    Mac::PanId  peerPanId;
+
+    if ((neighbor != nullptr) && neighbor->IsStateValid())
+    {
+        if (Get<ChildTable>().Contains(*neighbor))
+        {
+            panId = static_cast<Child *>(neighbor)->GetPanIdOr(panId);
+        }
+
+        ExitNow();
+    }
+
+    VerifyOrExit(aScope == kAnyPeer);
+    VerifyOrExit(aMacDest.IsExtended());
+
+    child = Get<ChildTable>().FindChild(aMacDest.GetExtended(), Child::kInStateAnyExceptInvalid);
+
+    if ((child != nullptr) &&
+        (FindPanIdAssignment(keyManager.GetPanIdPool(), keyManager.GetPanIdPoolSize(), child->GetPanId()) != nullptr))
+    {
+        // A device that is attaching (Parent Response, Child ID
+        // Response, ...) is on the PAN of its Parent Request.
+        panId = child->GetPanId();
+        LogMultiPan("framer: attaching child -> PAN 0x%04x", panId);
+    }
+    else if (Get<Mac::Mac>().FindPeerPanId(aMacDest.GetExtended(), peerPanId))
+    {
+        // Pre-configured device or joiner: use the PAN its frames
+        // were received on.
+        panId = peerPanId;
+        LogMultiPan("framer: peer seen on PAN 0x%04x", panId);
+    }
+    else
+    {
+        // No PAN context for this peer: a new commissioning joiner.
+        panId = Get<MeshCoP::JoinerRouter>().GetOrAllocateNextPanId();
+        LogMultiPan("framer: commissioning frame -> PAN 0x%04x", panId);
+    }
+
+exit:
+#else
+    OT_UNUSED_VARIABLE(aMacDest);
+    OT_UNUSED_VARIABLE(aScope);
+#endif
+
+    return panId;
 }
 
 #if OPENTHREAD_FTD

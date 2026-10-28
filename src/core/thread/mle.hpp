@@ -1556,9 +1556,10 @@ private:
         Error SendTo(const Ip6::Address &aDestination);
 
     private:
-        Error AppendAddressRegistrationEntry(const Ip6::Address &aAddress);
-        Error AppendDatasetTlv(MeshCoP::Dataset::Type aDatasetType);
-        Error AppendFullOrCompactRouteTlv(uint16_t aDestRloc16);
+        Error      AppendAddressRegistrationEntry(const Ip6::Address &aAddress);
+        Error      AppendDatasetTlv(MeshCoP::Dataset::Type aDatasetType);
+        Error      AppendFullOrCompactRouteTlv(uint16_t aDestRloc16);
+        Mac::PanId DeterminePanId(const Ip6::Address &aDestination) const;
     };
 
     //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -2305,6 +2306,7 @@ private:
     uint32_t   GetAttachStartDelay(void) const;
     void       SendAnnounce(uint8_t aChannel, AnnounceMode aMode);
     void       SendAnnounce(uint8_t aChannel, const Ip6::Address &aDestination, AnnounceMode aMode = kNormalAnnounce);
+    void       SendAnnounce(uint8_t aChannel, const Ip6::Address &aDestination, Mac::PanId aPanId, AnnounceMode aMode);
     bool       IsNetworkDataNewer(const LeaderData &aLeaderData);
     bool       HasUnregisteredAddress(void) const;
     bool       ShouldRegisterUnicastAddrWithParent(const Ip6::Netif::UnicastAddress &aUnicastAddress) const;
@@ -2312,7 +2314,8 @@ private:
     Error      ProcessMessageSecurity(Crypto::AesCcm::Operation aOperation,
                                       Message                  &aMessage,
                                       uint16_t                  aCmdOffset,
-                                      const AesCcmAuthData     &aAuthData);
+                                      const AesCcmAuthData     &aAuthData,
+                                      Mac::PanId                aPanId);
 
 #if OPENTHREAD_CONFIG_MLE_INFORM_PREVIOUS_PARENT_ON_REATTACH
     void InformPreviousParent(void);
@@ -2402,28 +2405,31 @@ private:
     Error    SendLinkAccept(const LinkAcceptInfo &aInfo);
     void     SendParentResponse(const ParentResponseInfo &aInfo);
     Error    SendChildIdResponse(Child &aChild);
-    Error    SendChildUpdateRequestToChild(Child &aChild);
-    void     SendChildUpdateResponseToChild(Child *aChild, const ChildUpdateResponseInfo &aInfo);
-    void     SendMulticastDataResponse(void);
-    void     SendDataResponse(const Ip6::Address &aDestination,
-                              const TlvList      &aTlvList,
-                              const Message      *aRequestMessage = nullptr);
-    Error    SendDiscoveryResponse(const Ip6::Address &aDestination, const DiscoveryResponseInfo &aInfo);
-    void     SetStateRouter(uint16_t aRloc16);
-    void     SetStateLeader(uint16_t aRloc16, LeaderStartMode aStartMode);
-    void     SetStateRouterOrLeader(DeviceRole aRole, uint16_t aRloc16, LeaderStartMode aStartMode);
-    void     StopLeader(void);
-    void     SynchronizeChildNetworkData(void);
-    Error    ProcessAddressRegistrationTlv(RxInfo &aRxInfo, Child &aChild);
-    bool     HasNeighborWithGoodLinkQuality(void) const;
-    void     HandlePartitionChange(void);
-    void     SetChildStateToValid(Child &aChild);
-    bool     HasChildren(void);
-    void     RemoveChildren(void);
-    void     HandleAdvertiseTrickleTimer(void);
-    void     HandleTimeTick(void);
-    void     ScheduleChildUpdateToRestoreNonSleepyChildren(void);
-    void     HandleRouterTableEvent(RouterTable::Events aEvents);
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    Error AppendMultiPanActiveDatasetTlv(TxMessage &aMessage, Child &aChild);
+#endif
+    Error SendChildUpdateRequestToChild(Child &aChild);
+    void  SendChildUpdateResponseToChild(Child *aChild, const ChildUpdateResponseInfo &aInfo);
+    void  SendMulticastDataResponse(void);
+    void  SendDataResponse(const Ip6::Address &aDestination,
+                           const TlvList      &aTlvList,
+                           const Message      *aRequestMessage = nullptr);
+    Error SendDiscoveryResponse(const Ip6::Address &aDestination, const DiscoveryResponseInfo &aInfo);
+    void  SetStateRouter(uint16_t aRloc16);
+    void  SetStateLeader(uint16_t aRloc16, LeaderStartMode aStartMode);
+    void  SetStateRouterOrLeader(DeviceRole aRole, uint16_t aRloc16, LeaderStartMode aStartMode);
+    void  StopLeader(void);
+    void  SynchronizeChildNetworkData(void);
+    Error ProcessAddressRegistrationTlv(RxInfo &aRxInfo, Child &aChild);
+    bool  HasNeighborWithGoodLinkQuality(void) const;
+    void  HandlePartitionChange(void);
+    void  SetChildStateToValid(Child &aChild);
+    bool  HasChildren(void);
+    void  RemoveChildren(void);
+    void  HandleAdvertiseTrickleTimer(void);
+    void  HandleTimeTick(void);
+    void  ScheduleChildUpdateToRestoreNonSleepyChildren(void);
+    void  HandleRouterTableEvent(RouterTable::Events aEvents);
 
     template <Uri kUri> void HandleTmf(Coap::Msg &aMsg);
 

@@ -122,6 +122,13 @@ public:
 #endif // OPENTHREAD_FTD
 
 private:
+    enum PeerScope : uint8_t
+    {
+        kValidNeighborOnly, // Only a valid child uses its own PAN.
+        kAnyPeer,           // Also peers that are attaching or joining (Multi-PAN).
+    };
+
+    Mac::PanId               DeterminePanId(const Mac::Address &aMacDest, PeerScope aScope);
     static constexpr uint8_t kMeshHeaderFrameMtu     = OT_RADIO_FRAME_MAX_SIZE; // Max MTU with a Mesh Header frame.
     static constexpr uint8_t kMeshHeaderFrameFcsSize = sizeof(uint16_t);        // Frame FCS size for Mesh Header frame.
 

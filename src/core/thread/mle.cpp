@@ -1429,6 +1429,23 @@ void Mle::SendAnnounce(uint8_t aChannel, AnnounceMode aMode)
 
 void Mle::SendAnnounce(uint8_t aChannel, const Ip6::Address &aDestination, AnnounceMode aMode)
 {
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    // Multi-PAN: one Announce per PAN of the PAN ID list (each one
+    // secured with the MLE key of its PAN), then the router's own.
+
+    KeyManager &keyManager = Get<KeyManager>();
+
+    for (uint8_t i = 0; i < keyManager.GetPanIdCount(); i++)
+    {
+        SendAnnounce(aChannel, aDestination, keyManager.GetPanIdAt(i), aMode);
+    }
+#endif
+
+    SendAnnounce(aChannel, aDestination, Get<Mac::Mac>().GetPanId(), aMode);
+}
+
+void Mle::SendAnnounce(uint8_t aChannel, const Ip6::Address &aDestination, Mac::PanId aPanId, AnnounceMode aMode)
+{
     Error              error = kErrorNone;
     MeshCoP::Timestamp activeTimestamp;
     TxMessage         *message = nullptr;
@@ -1437,6 +1454,7 @@ void Mle::SendAnnounce(uint8_t aChannel, const Ip6::Address &aDestination, Annou
     VerifyOrExit((message = NewMleMessage(kCommandAnnounce)) != nullptr, error = kErrorNoBufs);
     message->SetLinkSecurityEnabled(true);
     message->SetChannel(aChannel);
+    message->SetPanId(aPanId);
 
     SuccessOrExit(error = Tlv::Append<ChannelTlv>(*message, ChannelTlvValue(Get<Mac::Mac>().GetPanChannel())));
 
@@ -1452,11 +1470,11 @@ void Mle::SendAnnounce(uint8_t aChannel, const Ip6::Address &aDestination, Annou
         break;
     }
 
-    SuccessOrExit(error = Tlv::Append<PanIdTlv>(*message, Get<Mac::Mac>().GetPanId()));
+    SuccessOrExit(error = Tlv::Append<PanIdTlv>(*message, aPanId));
 
     SuccessOrExit(error = message->SendTo(aDestination));
 
-    LogInfo("Send Announce on channel %d", aChannel);
+    LogInfo("Send Announce on channel %d, PAN 0x%04x", aChannel, aPanId);
 
 exit:
     FreeMessageOnError(message, error);
@@ -1508,7 +1526,8 @@ exit:
 Error Mle::ProcessMessageSecurity(Crypto::AesCcm::Operation aOperation,
                                   Message                  &aMessage,
                                   uint16_t                  aCmdOffset,
-                                  const AesCcmAuthData     &aAuthData)
+                                  const AesCcmAuthData     &aAuthData,
+                                  Mac::PanId                aPanId)
 {
     // This method performs MLE message security. Based on `aOperation`
     // it can be used to encrypt and append tag to `aMessage` or to
@@ -1538,9 +1557,27 @@ Error Mle::ProcessMessageSecurity(Crypto::AesCcm::Operation aOperation,
 
     keySequence = aAuthData.mSecurityHeader.GetKeyId();
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    {
+        // Multi-PAN: use the MLE key of the peer's PAN. A PAN with
+        // no key fails the security check (never falls back).
+
+        const KeyMaterial *mleKey;
+
+        mleKey = (keySequence == Get<KeyManager>().GetCurrentKeySequence())
+                     ? Get<KeyManager>().GetMleKeyForPanId(aPanId)
+                     : Get<KeyManager>().GetTemporaryMleKeyForPanId(keySequence, aPanId);
+
+        VerifyOrExit(mleKey != nullptr, error = kErrorSecurity);
+        aesCcm.SetKey(*mleKey);
+    }
+#else
+    OT_UNUSED_VARIABLE(aPanId);
+
     aesCcm.SetKey(keySequence == Get<KeyManager>().GetCurrentKeySequence()
                       ? Get<KeyManager>().GetCurrentMleKey()
                       : Get<KeyManager>().GetTemporaryMleKey(keySequence));
+#endif
 
     aesCcm.SetNonce(nonce);
     aesCcm.SetAuthData(&aAuthData, sizeof(AesCcmAuthData));
@@ -1622,13 +1659,31 @@ void Mle::HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageIn
     authData.mSenderAddr   = aMessageInfo.GetPeerAddr();
     authData.mReceiverAddr = aMessageInfo.GetSockAddr();
 
-    SuccessOrExit(error = ProcessMessageSecurity(Crypto::AesCcm::kDecrypt, aMessage, aMessage.GetOffset(), authData));
+    // The rx message PAN is the one of the MAC frame that carried it,
+    // so it is the PAN of the sender (Multi-PAN).
+    SuccessOrExit(error = ProcessMessageSecurity(Crypto::AesCcm::kDecrypt, aMessage, aMessage.GetOffset(), authData,
+                                                 aMessage.GetPanId()));
 
     SuccessOrExit(error = aMessage.ReadAtAndAdvanceOffset(command));
 
     extAddr.SetFromIid(aMessageInfo.GetPeerAddr().GetIid());
     neighbor = (command == kCommandChildIdResponse) ? mNeighborTable.FindParent(extAddr)
                                                     : mNeighborTable.FindNeighbor(extAddr);
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE && OPENTHREAD_FTD
+    if ((neighbor != nullptr) && mChildTable.Contains(*neighbor))
+    {
+        Child &child = static_cast<Child &>(*neighbor);
+
+        // A child restored after a reboot has no known PAN until it
+        // talks to us. The message was authenticated with the key of
+        // its PAN, so it is safe to learn the PAN from it.
+        if (child.GetPanId() == 0)
+        {
+            child.SetPanId(aMessage.GetPanId());
+        }
+    }
+#endif
 
 #if OPENTHREAD_FTD
     if (neighbor == nullptr)
@@ -3862,7 +3917,8 @@ Error Mle::TxMessage::SendTo(const Ip6::Address &aDestination)
         authData.mSenderAddr   = messageInfo.GetSockAddr();
         authData.mReceiverAddr = messageInfo.GetPeerAddr();
 
-        SuccessOrExit(error = Get<Mle>().ProcessMessageSecurity(Crypto::AesCcm::kEncrypt, *this, offset, authData));
+        SuccessOrExit(error = Get<Mle>().ProcessMessageSecurity(Crypto::AesCcm::kEncrypt, *this, offset, authData,
+                                                                DeterminePanId(aDestination)));
 
         Get<KeyManager>().IncrementMleFrameCounter();
     }
@@ -3871,6 +3927,47 @@ Error Mle::TxMessage::SendTo(const Ip6::Address &aDestination)
 
 exit:
     return error;
+}
+
+Mac::PanId Mle::TxMessage::DeterminePanId(const Ip6::Address &aDestination) const
+{
+    // Determines the PAN whose MLE key secures this message: the
+    // PAN of the destination child, else the PAN the message was
+    // tagged with (e.g. a per-PAN Announce), else the router's own.
+
+    Mac::PanId panId = Get<Mac::Mac>().GetPanId();
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    bool isChild = false;
+
+#if OPENTHREAD_FTD
+    if (!aDestination.IsMulticast())
+    {
+        Mac::ExtAddress extAddress;
+        const Child    *child;
+
+        extAddress.SetFromIid(aDestination.GetIid());
+        child = Get<ChildTable>().FindChild(extAddress, Child::kInStateAnyExceptInvalid);
+
+        if (child != nullptr)
+        {
+            panId   = child->GetPanIdOr(panId);
+            isChild = true;
+        }
+    }
+#else
+    OT_UNUSED_VARIABLE(aDestination);
+#endif
+
+    if (!isChild && Get<KeyManager>().IsPanIdInList(GetPanId()))
+    {
+        panId = GetPanId();
+    }
+#else
+    OT_UNUSED_VARIABLE(aDestination);
+#endif
+
+    return panId;
 }
 
 #if OPENTHREAD_FTD
@@ -5907,6 +6004,10 @@ void Mle::AnnounceHandler::HandleAnnounce(RxInfo &aRxInfo)
     isFromOrphan         = timestamp.IsOrphanAnnounce();
     timestampCompare     = MeshCoP::Timestamp::Compare(timestamp, Get<MeshCoP::ActiveDatasetManager>().GetTimestamp());
     channelAndPanIdMatch = (channel == Get<Mac::Mac>().GetPanChannel()) && (panId == Get<Mac::Mac>().GetPanId());
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    channelAndPanIdMatch = channelAndPanIdMatch ||
+                           ((channel == Get<Mac::Mac>().GetPanChannel()) && Get<KeyManager>().IsPanIdInList(panId));
+#endif
 
     // Determine the action to perform.
 
