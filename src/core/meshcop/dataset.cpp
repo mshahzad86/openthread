@@ -150,6 +150,11 @@ bool Dataset::IsTlvValid(const Tlv &aTlv)
     case Tlv::kPanId:
         minLength = sizeof(PanIdTlv::UintValueType);
         break;
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    case Tlv::kPanIds:
+        minLength = sizeof(PanIdsTlv::ValueType);
+        break;
+#endif
     case Tlv::kExtendedPanId:
         minLength = sizeof(ExtendedPanIdTlv::ValueType);
         break;
@@ -301,6 +306,12 @@ void Dataset::ConvertTo(Info &aDatasetInfo) const
         case Tlv::kPanId:
             aDatasetInfo.Set<kPanId>(cur->ReadValueAs<PanIdTlv>());
             break;
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+        case Tlv::kPanIds:
+            aDatasetInfo.Set<kPanIds>(cur->ReadValueAs<PanIdsTlv>());
+            break;
+#endif
 
         case Tlv::kPendingTimestamp:
             aDatasetInfo.Set<kPendingTimestamp>(cur->ReadValueAs<PendingTimestampTlv>());
@@ -498,6 +509,17 @@ Error Dataset::WriteTlvsFrom(const Dataset::Info &aDatasetInfo)
     {
         SuccessOrExit(error = Write<PanIdTlv>(aDatasetInfo.Get<kPanId>()));
     }
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    if (aDatasetInfo.IsPresent<kPanIds>())
+    {
+        SuccessOrExit(error = Write<PanIdsTlv>(aDatasetInfo.Get<kPanIds>()));
+    }
+
+    // The PAN Key list (`kPanKeys`) is never written: as a TLV it is
+    // larger than a whole Dataset. PAN keys are given to `KeyManager`
+    // directly (see `SetPanKeys()`).
+#endif
 
     if (aDatasetInfo.IsPresent<kPskc>())
     {

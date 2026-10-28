@@ -88,6 +88,8 @@ public:
         kMeshLocalPrefix,  ///< Mesh Local Prefix
         kDelay,            ///< Delay
         kPanId,            ///< PAN Identifier
+        kPanIds,           ///< List of PAN Identifiers
+        kPanKeys,          ///< List of PAN Keys
         kChannel,          ///< Channel
         kPskc,             ///< PSKc
         kSecurityPolicy,   ///< Security Policy
@@ -731,6 +733,8 @@ DefineIsPresentAndMarkAsPresent(ExtendedPanId)
 DefineIsPresentAndMarkAsPresent(MeshLocalPrefix)
 DefineIsPresentAndMarkAsPresent(Delay)
 DefineIsPresentAndMarkAsPresent(PanId)
+DefineIsPresentAndMarkAsPresent(PanIds)
+DefineIsPresentAndMarkAsPresent(PanKeys)
 DefineIsPresentAndMarkAsPresent(Channel)
 DefineIsPresentAndMarkAsPresent(Pskc)
 DefineIsPresentAndMarkAsPresent(SecurityPolicy)
@@ -749,6 +753,8 @@ template <> struct Dataset::TypeFor<Dataset::kExtendedPanId>    { using Type = E
 template <> struct Dataset::TypeFor<Dataset::kMeshLocalPrefix>  { using Type = Ip6::NetworkPrefix; };
 template <> struct Dataset::TypeFor<Dataset::kDelay>            { using Type = uint32_t; };
 template <> struct Dataset::TypeFor<Dataset::kPanId>            { using Type = Mac::PanId; };
+template <> struct Dataset::TypeFor<Dataset::kPanKeys>          { using Type = otPanKeyList; };
+template <> struct Dataset::TypeFor<Dataset::kPanIds>           { using Type = otPanIdList; };
 template <> struct Dataset::TypeFor<Dataset::kChannel>          { using Type = uint16_t; };
 template <> struct Dataset::TypeFor<Dataset::kPskc>             { using Type = Pskc; };
 template <> struct Dataset::TypeFor<Dataset::kSecurityPolicy>   { using Type = SecurityPolicy; };
@@ -782,6 +788,10 @@ template <> inline const Ip6::NetworkPrefix &Dataset::Info::Get<Dataset::kMeshLo
 template <> inline const uint32_t &Dataset::Info::Get<Dataset::kDelay>(void) const { return mDelay; }
 
 template <> inline const Mac::PanId &Dataset::Info::Get<Dataset::kPanId>(void) const { return mPanId; }
+
+template <> inline const otPanIdList &Dataset::Info::Get<Dataset::kPanIds>(void) const { return mPanIds; }
+
+template <> inline const otPanKeyList &Dataset::Info::Get<Dataset::kPanKeys>(void) const { return mPanKeys; }
 
 template <> inline const uint16_t &Dataset::Info::Get<Dataset::kChannel>(void) const { return mChannel; }
 

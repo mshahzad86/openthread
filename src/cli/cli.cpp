@@ -1742,6 +1742,16 @@ template <> otError Interpreter::Process<Cmd("child")>(Arg aArgs[])
          */
         if (isTable)
         {
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+            static const char *const kChildTableTitles[] = {
+                "ID",  "RLOC16", "Timeout", "Age",     "LQ In",  "C_VN",         "R", "D", "N",
+                "Ver", "CSL",    "QMsgCnt", "Suprvsn", "Pan Id", "Extended MAC",
+            };
+
+            static const uint8_t kChildTableColumnWidths[] = {
+                5, 8, 12, 12, 7, 6, 1, 1, 1, 3, 3, 7, 7, 8, 18,
+            };
+#else
             static const char *const kChildTableTitles[] = {
                 "ID", "RLOC16", "Timeout", "Age", "LQ In",   "C_VN",    "R",
                 "D",  "N",      "Ver",     "CSL", "QMsgCnt", "Suprvsn", "Extended MAC",
@@ -1750,6 +1760,7 @@ template <> otError Interpreter::Process<Cmd("child")>(Arg aArgs[])
             static const uint8_t kChildTableColumnWidths[] = {
                 5, 8, 12, 12, 7, 6, 1, 1, 1, 3, 3, 7, 7, 18,
             };
+#endif
 
             OutputTableHeader(kChildTableTitles, kChildTableColumnWidths);
         }
@@ -1779,6 +1790,9 @@ template <> otError Interpreter::Process<Cmd("child")>(Arg aArgs[])
                 OutputFormat("| %1d ", childInfo.mIsCslSynced);
                 OutputFormat("| %5u ", childInfo.mQueuedMessageCnt);
                 OutputFormat("| %5u ", childInfo.mSupervisionInterval);
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+                OutputFormat("| 0x%04x ", childInfo.mPanId);
+#endif
                 OutputFormat("| ");
                 OutputExtAddress(childInfo.mExtAddress);
                 OutputLine(" |");

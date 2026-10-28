@@ -116,6 +116,20 @@ const Dataset::ComponentMapper *Dataset::LookupMapper(const char *aName) const
             &Dataset::OutputPanId,
             &Dataset::ParsePanId,
         },
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+        {
+            "panids",
+            &Components::mIsPanIdsPresent,
+            &Dataset::OutputPanIds,
+            &Dataset::ParsePanIds,
+        },
+        {
+            "pankeys",
+            &Components::mIsPanKeysPresent,
+            &Dataset::OutputPanKeys,
+            &Dataset::ParsePanKeys,
+        },
+#endif
         {
             "pendingtimestamp",
             &Components::mIsPendingTimestampPresent,
@@ -337,6 +351,65 @@ void Dataset::OutputPanId(const otOperationalDataset &aDataset) { OutputLine("0x
  * @par
  * Gets or sets #otOperationalDataset::mPendingTimestamp.
  */
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+/**
+ * @cli dataset panids (get,set)
+ * @code
+ * dataset panids
+ * 0x1234
+ * 0x5678
+ * Done
+ * @endcode
+ * @code
+ * dataset panids 0x1234 0x5678
+ * Done
+ * @endcode
+ * @cparam dataset panids [@ca{panid} ...]
+ * Use the optional list of `panid` arguments to set the PAN ID list.
+ * @par
+ * Gets or sets #otOperationalDataset::mPanIds.
+ */
+void Dataset::OutputPanIds(const otOperationalDataset &aDataset)
+{
+    if (aDataset.mComponents.mIsPanIdsPresent)
+    {
+        for (uint8_t i = 0; i < aDataset.mPanIds.mCount; i++)
+        {
+            OutputLine("0x%04x", aDataset.mPanIds.mPanIds[i]);
+        }
+    }
+}
+
+/**
+ * @cli dataset pankeys (get,set)
+ * @code
+ * dataset pankeys
+ * 00112233445566778899aabbccddeeff
+ * 112233445566778899aabbccddeeff00
+ * Done
+ * @endcode
+ * @code
+ * dataset pankeys 00112233445566778899aabbccddeeff 112233445566778899aabbccddeeff00
+ * Done
+ * @endcode
+ * @cparam dataset pankeys [@ca{key} ...]
+ * Use the optional list of `key` arguments to set the PAN Key list.
+ * @par
+ * Gets or sets #otOperationalDataset::mPanKeys.
+ */
+void Dataset::OutputPanKeys(const otOperationalDataset &aDataset)
+{
+    if (aDataset.mComponents.mIsPanKeysPresent)
+    {
+        for (uint8_t i = 0; i < aDataset.mPanKeys.mCount; i++)
+        {
+            OutputBytesLine(aDataset.mPanKeys.mPanKeys[i].m8);
+        }
+    }
+}
+#endif // OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+
 void Dataset::OutputPendingTimestamp(const otOperationalDataset &aDataset)
 {
     OutputUint64Line(aDataset.mPendingTimestamp.mSeconds);
@@ -461,6 +534,54 @@ otError Dataset::ParsePanId(Arg *&aArgs, otOperationalDataset &aDataset)
     return aArgs++->ParseAsUint16(aDataset.mPanId);
 }
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+otError Dataset::ParsePanIds(Arg *&aArgs, otOperationalDataset &aDataset)
+{
+    otError error = OT_ERROR_NONE;
+    uint8_t count = 0;
+
+    ClearAllBytes(aDataset.mPanIds);
+
+    while (!aArgs->IsEmpty() && count < OT_MAX_PAN_IDS)
+    {
+        SuccessOrExit(error = aArgs->ParseAsUint16(aDataset.mPanIds.mPanIds[count]));
+        aArgs++;
+        count++;
+    }
+
+    aDataset.mPanIds.mCount = count;
+
+exit:
+    return error;
+}
+
+otError Dataset::ParsePanKeys(Arg *&aArgs, otOperationalDataset &aDataset)
+{
+    // The PAN Key list does not fit in a Dataset, so it is given to
+    // the stack directly (it is not part of the Dataset TLVs and is
+    // not persisted).
+
+    otError      error = OT_ERROR_NONE;
+    otPanKeyList panKeys;
+
+    ClearAllBytes(panKeys);
+
+    while (!aArgs->IsEmpty() && panKeys.mCount < OT_MAX_PAN_KEYS)
+    {
+        SuccessOrExit(error = aArgs->ParseAsHexString(panKeys.mPanKeys[panKeys.mCount].m8));
+        aArgs++;
+        panKeys.mCount++;
+    }
+
+    SuccessOrExit(error = otDatasetSetMultiPanKeys(GetInstancePtr(), &panKeys));
+
+    aDataset.mPanKeys = panKeys;
+
+exit:
+    return error;
+}
+#endif // OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+
 otError Dataset::ParsePendingTimestamp(Arg *&aArgs, otOperationalDataset &aDataset)
 {
     otError error;
@@ -539,6 +660,14 @@ otError Dataset::ProcessCommand(const ComponentMapper &aMapper, Arg aArgs[])
     }
     else
     {
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+        if (aMapper.mParse == &Dataset::ParsePanKeys)
+        {
+            // PAN keys go to the stack directly, not to the dataset buffer.
+            ClearAllBytes(dataset);
+            ExitNow(error = (this->*aMapper.mParse)(aArgs, dataset));
+        }
+#endif
         ClearAllBytes(dataset);
         SuccessOrExit(error = (this->*aMapper.mParse)(aArgs, dataset));
         dataset.mComponents.*aMapper.mIsPresentPtr = true;
@@ -569,6 +698,9 @@ otError Dataset::Print(otOperationalDatasetTlvs &aDatasetTlvs, bool aNonsensitiv
         {"Network Key", "networkkey", true},
         {"Network Name", "networkname", false},
         {"PAN ID", "panid", false},
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+        {"PAN IDs", "panids", false},
+#endif
         {"PSKc", "pskc", true},
         {"Security Policy", "securitypolicy", false},
     };
@@ -1301,6 +1433,7 @@ otError Dataset::Process(Arg aArgs[])
      * networkkey
      * networkname
      * panid
+     * pankeys
      * pending
      * pendingtimestamp
      * pskc

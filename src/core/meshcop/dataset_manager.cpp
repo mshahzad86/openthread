@@ -171,6 +171,9 @@ exit:
 Error DatasetManager::ApplyConfiguration(const Dataset &aDataset) const
 {
     Error error = kErrorNone;
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    bool hasPanIds = false;
+#endif
 
     SuccessOrExit(error = aDataset.ValidateTlvs());
 
@@ -203,6 +206,13 @@ Error DatasetManager::ApplyConfiguration(const Dataset &aDataset) const
             Get<KeyManager>().SetNetworkKey(cur->ReadValueAs<NetworkKeyTlv>());
             break;
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+        case Tlv::kPanIds:
+            Get<KeyManager>().SetPanIds(cur->ReadValueAs<PanIdsTlv>());
+            hasPanIds = true;
+            break;
+#endif
+
 #if OPENTHREAD_FTD
         case Tlv::kPskc:
             Get<KeyManager>().SetPskc(cur->ReadValueAs<PskcTlv>());
@@ -221,6 +231,21 @@ Error DatasetManager::ApplyConfiguration(const Dataset &aDataset) const
             break;
         }
     }
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    if (!hasPanIds && (Get<KeyManager>().GetPanIdCount() > 0))
+    {
+        // The PAN ID list was removed from the dataset.
+        otPanIdList emptyList;
+
+        ClearAllBytes(emptyList);
+        Get<KeyManager>().SetPanIds(emptyList);
+    }
+
+    // The pool depends on the PAN ID, the Network Key and the PAN
+    // lists, so it is built after every TLV is applied.
+    Get<KeyManager>().BuildPanIdPool();
+#endif
 
 exit:
     return error;

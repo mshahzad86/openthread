@@ -99,6 +99,10 @@ private:
     void OutputNetworkKey(const otOperationalDataset &aDataset);
     void OutputNetworkName(const otOperationalDataset &aDataset);
     void OutputPanId(const otOperationalDataset &aDataset);
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    void OutputPanIds(const otOperationalDataset &aDataset);
+    void OutputPanKeys(const otOperationalDataset &aDataset);
+#endif
     void OutputPendingTimestamp(const otOperationalDataset &aDataset);
     void OutputPskc(const otOperationalDataset &aDataset);
     void OutputSecurityPolicy(const otOperationalDataset &aDataset);
@@ -112,6 +116,10 @@ private:
     otError ParseNetworkKey(Arg *&aArgs, otOperationalDataset &aDataset);
     otError ParseNetworkName(Arg *&aArgs, otOperationalDataset &aDataset);
     otError ParsePanId(Arg *&aArgs, otOperationalDataset &aDataset);
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    otError ParsePanIds(Arg *&aArgs, otOperationalDataset &aDataset);
+    otError ParsePanKeys(Arg *&aArgs, otOperationalDataset &aDataset);
+#endif
     otError ParsePendingTimestamp(Arg *&aArgs, otOperationalDataset &aDataset);
     otError ParsePskc(Arg *&aArgs, otOperationalDataset &aDataset);
     otError ParseSecurityPolicy(Arg *&aArgs, otOperationalDataset &aDataset);

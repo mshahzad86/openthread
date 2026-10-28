@@ -61,6 +61,19 @@ otError otDatasetSetActive(otInstance *aInstance, const otOperationalDataset *aD
     return OT_ERROR_NONE;
 }
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+otError otDatasetSetMultiPanKeys(otInstance *aInstance, const otPanKeyList *aPanKeys)
+{
+    Error error = kErrorNone;
+
+    VerifyOrExit(aPanKeys->mCount <= OT_MAX_PAN_KEYS, error = kErrorInvalidArgs);
+    AsCoreType(aInstance).Get<KeyManager>().SetPanKeys(*aPanKeys);
+
+exit:
+    return error;
+}
+#endif
+
 otError otDatasetSetActiveTlvs(otInstance *aInstance, const otOperationalDatasetTlvs *aDataset)
 {
     AssertPointerIsNotNull(aDataset);

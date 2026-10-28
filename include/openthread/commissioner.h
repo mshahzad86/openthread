@@ -289,6 +289,63 @@ otError otCommissionerRemoveJoiner(otInstance *aInstance, const otExtAddress *aE
 otError otCommissionerRemoveJoinerWithDiscerner(otInstance *aInstance, const otJoinerDiscerner *aDiscerner);
 
 /**
+ * Maps a device's EUI-64 to a Group ID in the preconfigured Group Registry.
+ *
+ * When `otCommissionerAddJoiner()` is later called (or was already called) for this EUI-64,
+ * it is handed the PAN ID/Network Key already bound to the group (allocating one on the
+ * first member seen), instead of the plain per-device round-robin allocation. If the device
+ * already has a Joiner entry whose resolved PAN changes as a result, it is force-detached so
+ * it rejoins on the new PAN.
+ *
+ * @param[in]  aInstance  A pointer to an OpenThread instance.
+ * @param[in]  aEui64     A pointer to the device's IEEE EUI-64.
+ * @param[in]  aGroupId   The Group ID to associate with @p aEui64. Must be non-zero.
+ *
+ * @retval OT_ERROR_NONE          Successfully added (or updated) the mapping.
+ * @retval OT_ERROR_INVALID_ARGS  @p aGroupId is the reserved "no group" value (0).
+ * @retval OT_ERROR_NO_BUFS       No space left in the Group Registry.
+ */
+otError otCommissionerAddGroupMember(otInstance *aInstance, const otExtAddress *aEui64, uint8_t aGroupId);
+
+/**
+ * Un-maps a device from its group. The device falls back to the plain per-device
+ * round-robin allocator, the way an EUI-64 with no registry entry always has. The rest of
+ * the group keeps its existing PAN/Network Key.
+ *
+ * @param[in]  aInstance  A pointer to an OpenThread instance.
+ * @param[in]  aEui64     A pointer to the device's IEEE EUI-64.
+ *
+ * @retval OT_ERROR_NONE       Successfully removed the mapping.
+ * @retval OT_ERROR_NOT_FOUND  @p aEui64 has no Group Registry entry.
+ */
+otError otCommissionerRemoveGroupMember(otInstance *aInstance, const otExtAddress *aEui64);
+
+/**
+ * Rekeys a group: allocates a fresh PAN/Network Key and moves every current member onto
+ * it, force-detaching each one that is currently attached.
+ *
+ * @param[in]  aInstance  A pointer to an OpenThread instance.
+ * @param[in]  aGroupId   The Group ID to rekey.
+ *
+ * @retval OT_ERROR_NONE       Successfully rekeyed the group.
+ * @retval OT_ERROR_NOT_FOUND  @p aGroupId has no current PAN binding (no member has joined yet).
+ * @retval OT_ERROR_NO_BUFS    The PAN ID pool has no free entry for the new PAN.
+ */
+otError otCommissionerRekeyGroup(otInstance *aInstance, uint8_t aGroupId);
+
+/**
+ * Disbands a group: frees its PAN binding and every member's Group Registry entry, and
+ * force-detaches each currently-assigned member so it falls back to a solo PAN.
+ *
+ * @param[in]  aInstance  A pointer to an OpenThread instance.
+ * @param[in]  aGroupId   The Group ID to delete.
+ *
+ * @retval OT_ERROR_NONE       Successfully deleted the group.
+ * @retval OT_ERROR_NOT_FOUND  @p aGroupId has no current PAN binding (no member has joined yet).
+ */
+otError otCommissionerDeleteGroup(otInstance *aInstance, uint8_t aGroupId);
+
+/**
  * Gets the Provisioning URL.
  *
  * @param[in]    aInstance       A pointer to an OpenThread instance.

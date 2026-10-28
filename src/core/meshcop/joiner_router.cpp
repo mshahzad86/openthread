@@ -36,6 +36,7 @@
 #if OPENTHREAD_FTD
 
 #include "instance/instance.hpp"
+#include "thread/device_assignment.hpp"
 
 namespace ot {
 namespace MeshCoP {
@@ -48,6 +49,11 @@ JoinerRouter::JoinerRouter(Instance &aInstance)
     , mTimer(aInstance)
     , mJoinerUdpPort(0)
     , mIsJoinerPortConfigured(false)
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    , mHasPendingPanId(false)
+    , mPendingOrigin(kPendingNone)
+    , mPendingPanId(0)
+#endif
 {
 }
 
@@ -269,6 +275,128 @@ exit:
     return error;
 }
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+
+Error JoinerRouter::SelectPanIdForDiscovery(void) { return DecidePanId(/* aAllowRoundRobin */ true); }
+
+Error JoinerRouter::DecidePanId(bool aAllowRoundRobin)
+{
+    Error error   = kErrorNone;
+    bool  decided = false;
+
+#if OPENTHREAD_CONFIG_COMMISSIONER_ENABLE
+    Commissioner &commissioner = Get<Commissioner>();
+
+    if (commissioner.IsJoinerSessionActive())
+    {
+        // Another Joiner is mid-commissioning. Its PAN must not change
+        // under it, so keep the pending PAN as is. (Concurrent
+        // onboarding on different PANs is not supported: a second
+        // joiner discovered now would be told the same PAN.)
+        decided = true;
+        LogMultiPan("SelectPanIdForDiscovery: session in progress, keep pending=%u 0x%04x", mHasPendingPanId,
+                    mPendingPanId);
+    }
+    else
+    {
+        // The Discovery Request carries no joiner identity, so the
+        // best the router can do is to advertise the PAN pre-assigned
+        // (at `commissioner joiner add` time) to the joiner the
+        // operator added most recently that has not finished
+        // commissioning yet.
+        uint16_t expectedPanId = commissioner.GetExpectedJoinerPanId();
+
+        if (expectedPanId != Commissioner::kNoAssignedPanId)
+        {
+            mPendingPanId    = expectedPanId;
+            mHasPendingPanId = true;
+            mPendingOrigin   = kPendingExpectedJoiner;
+            decided          = true;
+            LogMultiPan("SelectPanIdForDiscovery: expected joiner -> PAN 0x%04x", expectedPanId);
+        }
+    }
+#endif // OPENTHREAD_CONFIG_COMMISSIONER_ENABLE
+
+    // Wildcard / discerner joiners have no pre-assigned PAN: allocate
+    // one from the round-robin pool. An unconsumed round-robin PAN is
+    // reused so repeated discoveries do not burn PANs.
+    if (aAllowRoundRobin && !decided && (!mHasPendingPanId || (mPendingOrigin == kPendingExpectedJoiner)))
+    {
+        const PanIdAssignment *assignment;
+
+#if OPENTHREAD_CONFIG_COMMISSIONER_ENABLE
+        assignment = Get<Commissioner>().AllocatePanId();
+#else
+        assignment = Get<KeyManager>().AllocateNextPanId();
+#endif
+
+        if (assignment != nullptr)
+        {
+            mPendingPanId    = assignment->mPanId;
+            mHasPendingPanId = true;
+            mPendingOrigin   = kPendingRoundRobin;
+            LogMultiPan("Pre-allocated PAN 0x%04x from pool for next joiner", assignment->mPanId);
+        }
+        else
+        {
+            mHasPendingPanId = false;
+            mPendingOrigin   = kPendingNone;
+
+            // Fail closed when Multi-PAN is in use: the joiner is not
+            // silently put on the router's own PAN.
+            if (Get<KeyManager>().GetPanIdCount() > 0)
+            {
+                error = kErrorNoBufs;
+                LogWarn("PAN pool exhausted, no PAN for the next joiner");
+            }
+        }
+    }
+
+    return error;
+}
+
+uint16_t JoinerRouter::GetOrAllocateNextPanId(void)
+{
+    if (!mHasPendingPanId)
+    {
+        // Not a Discovery Response: only pick up a PAN pre-assigned to
+        // an expected joiner, never burn a round-robin PAN for a frame
+        // that happens to be addressed to an unknown device.
+        IgnoreError(DecidePanId(/* aAllowRoundRobin */ false));
+    }
+
+    return mHasPendingPanId ? mPendingPanId : Get<Mac::Mac>().GetPanId();
+}
+
+bool JoinerRouter::PeekPendingPanId(uint16_t &aPanId) const
+{
+    if (mHasPendingPanId)
+    {
+        aPanId = mPendingPanId;
+    }
+
+    return mHasPendingPanId;
+}
+
+bool JoinerRouter::LookupPendingPanId(uint16_t &aPanId)
+{
+    bool found = false;
+
+    LogMultiPan("LookupPendingPanId: hasPending=%u pending=0x%04x", mHasPendingPanId, mPendingPanId);
+
+    VerifyOrExit(mHasPendingPanId);
+
+    aPanId           = mPendingPanId;
+    mHasPendingPanId = false;
+    mPendingOrigin   = kPendingNone;
+    found            = true;
+
+exit:
+    return found;
+}
+
+#endif // OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+
 Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(void)
 {
     static const Tlv::Type kTlvTypes[] = {
@@ -286,6 +414,30 @@ Coap::Message *JoinerRouter::PrepareJoinerEntrustMessage(void)
     message->SetSubType(Message::kSubTypeJoinerEntrust);
 
     SuccessOrExit(error = Get<ActiveDatasetManager>().Read(dataset));
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    {
+        // Multi-PAN: entrust the joiner with the Network Key of the PAN
+        // it was told in the Discovery Response. This only reads the
+        // pending PAN, so an aborted and retried entrust neither
+        // consumes nor leaks it.
+
+        KeyManager            &keyManager = Get<KeyManager>();
+        uint16_t               panId      = GetOrAllocateNextPanId();
+        const PanIdAssignment *assignment;
+
+        assignment = FindPanIdAssignment(keyManager.GetPanIdPool(), keyManager.GetPanIdPoolSize(), panId);
+
+        if (assignment != nullptr)
+        {
+            NetworkKey networkKey;
+
+            memcpy(networkKey.m8, assignment->mNetworkKey, NetworkKey::kSize);
+            SuccessOrExit(error = dataset.Write<NetworkKeyTlv>(networkKey));
+            LogMultiPan("Entrust: using PAN 0x%04x / NetworkKey for joiner", assignment->mPanId);
+        }
+    }
+#endif
 
     for (Tlv::Type tlvType : kTlvTypes)
     {

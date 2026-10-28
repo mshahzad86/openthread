@@ -244,6 +244,116 @@ public:
         return RemoveJoiner(nullptr, &aDiscerner, aDelay);
     }
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    /**
+     * Sentinel `Joiner::mAssignedPanId` value meaning "no group-assigned PAN - use the
+     * existing per-device round-robin allocator instead".
+     */
+    static constexpr uint16_t kNoAssignedPanId = 0xffff;
+
+    /**
+     * Maps a device's EUI-64 to a Group ID in the preconfigured Group Registry.
+     *
+     * If the device already has a Joiner entry (added via AddJoiner()) whose resolved PAN
+     * changes as a result, that Joiner is force-detached (see RemoveNeighbor()) so it
+     * rejoins on the new PAN.
+     *
+     * @param[in]  aEui64    The device's IEEE EUI-64.
+     * @param[in]  aGroupId  The Group ID to associate with @p aEui64. Must be non-zero.
+     *
+     * @retval kErrorNone          Successfully added (or updated) the mapping.
+     * @retval kErrorInvalidArgs   @p aGroupId is the reserved "no group" value (0).
+     * @retval kErrorNoBufs        No space left in the Group Registry.
+     */
+    Error AddGroupMember(const Mac::ExtAddress &aEui64, uint8_t aGroupId);
+
+    /**
+     * Un-maps a device from its group, per §11.1 of the group-PAN design: the device falls
+     * back to the plain per-device round-robin allocator, the way an EUI-64 with no registry
+     * entry always has. The rest of the group keeps its existing PAN/Network Key.
+     *
+     * @param[in]  aEui64  The device's IEEE EUI-64.
+     *
+     * @retval kErrorNone       Successfully removed the mapping.
+     * @retval kErrorNotFound   @p aEui64 has no Group Registry entry.
+     */
+    Error RemoveGroupMember(const Mac::ExtAddress &aEui64);
+
+    /**
+     * Rekeys a group: allocates a fresh PAN/Network Key and moves every current member of
+     * @p aGroupId onto it, force-detaching each one that is currently attached.
+     *
+     * @param[in]  aGroupId  The Group ID to rekey.
+     *
+     * @retval kErrorNone       Successfully rekeyed the group.
+     * @retval kErrorNotFound   @p aGroupId has no current PAN binding (no member has joined yet).
+     * @retval kErrorNoBufs     The PAN ID pool has no free entry for the new PAN.
+     */
+    Error RekeyGroup(uint8_t aGroupId);
+
+    /**
+     * Disbands a group: frees its PAN binding and every member's Group Registry entry, and
+     * force-detaches each currently-assigned member so it falls back to a solo PAN.
+     *
+     * @param[in]  aGroupId  The Group ID to delete.
+     *
+     * @retval kErrorNone       Successfully deleted the group.
+     * @retval kErrorNotFound   @p aGroupId has no current PAN binding (no member has joined yet).
+     */
+    Error DeleteGroup(uint8_t aGroupId);
+
+    /**
+     * Returns the PAN ID the Joiner Router should advertise in the next Discovery Response.
+     *
+     * A Discovery Request carries no joiner identity (the joiner's EUI-64 only becomes visible at
+     * DTLS time), so the "expected" joiner is the EUI-64 Joiner entry that was added (or
+     * refreshed) most recently and has not been finalized yet. This is exact when joiners are
+     * onboarded one at a time; a warning is logged if several pending entries disagree.
+     *
+     * @returns The expected joiner's assigned PAN ID, or `kNoAssignedPanId` if there is none.
+     */
+    uint16_t GetExpectedJoinerPanId(void) const;
+
+    /**
+     * Indicates whether a Joiner DTLS session is currently in progress.
+     *
+     * @retval TRUE   A joiner session has started and has not ended or timed out.
+     * @retval FALSE  No joiner session is in progress.
+     */
+    bool IsJoinerSessionActive(void) const { return (mActiveJoiner != nullptr) && mJoinerSessionTimer.IsRunning(); }
+
+    /**
+     * Indicates whether a PAN ID is reserved by a Joiner entry (assigned at `joiner add` time but
+     * possibly not yet attached), so the round-robin allocator must not hand it out.
+     *
+     * @param[in]  aPanId  The PAN ID to check.
+     *
+     * @retval TRUE   A Joiner entry holds @p aPanId.
+     * @retval FALSE  No Joiner entry holds @p aPanId.
+     */
+    bool IsPanReserved(uint16_t aPanId) const;
+
+    /**
+     * Allocates the next free PAN pool entry, skipping PANs used by attached children, bound to
+     * a group, or reserved by a Joiner entry.
+     *
+     * @returns The allocated pool entry, or `nullptr` if the pool is exhausted.
+     */
+    const PanIdAssignment *AllocatePanId(void);
+
+    /**
+     * Records the operational Extended Address of a child that just got its Child ID Response, on
+     * the finalized Joiner entry it belongs to, so a later group change can find and force-detach
+     * it. The entry is the most recently added finalized one whose assigned PAN is @p aPanId and
+     * that has no child recorded yet. No-op if there is none.
+     *
+     * @param[in]  aExtAddress  The attaching child's Extended Address.
+     * @param[in]  aPanId       The PAN ID the child was assigned.
+     */
+    void RecordFinalizedJoinerChildAddress(const Mac::ExtAddress &aExtAddress, uint16_t aPanId);
+
+#endif // OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+
     /**
      * Gets the Provisioning URL.
      *
@@ -410,9 +520,30 @@ private:
 
         JoinerPskd mPskd;
         Type       mType;
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+        uint16_t        mAssignedPanId;       // PAN decided at AddJoiner() (group or solo), else kNoAssignedPanId.
+        Mac::ExtAddress mLastChildExtAddress; // Set once this Joiner attaches; all-zero until then.
+        uint32_t        mAddSequence;         // Order of add/refresh (latest = expected joiner).
+        bool            mFinalized;           // Joiner Finalize was answered; no longer the expected joiner.
+#endif
 
         void CopyToJoinerInfo(otJoinerInfo &aJoiner) const;
     };
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    // EUI-64 -> Group ID mapping - the preconfigured "Group Registry" (design doc §4.1).
+    // Kept separate from `mJoiners[]`: "who's allowed to join with what credential" vs.
+    // "which group they're pre-assigned to" are independently managed.
+    struct GroupMembership
+    {
+        Mac::ExtAddress mEui64;
+        uint8_t         mGroupId; // kUnboundGroupId means this slot is unused
+    };
+
+    static constexpr uint16_t kMaxGroupEntries = 32;
+
+    static bool IsPanReservedCallback(const void *aContext, uint16_t aPanId);
+#endif
 
     Error   Stop(ResignMode aResignMode);
     Joiner *GetUnusedJoinerEntry(void);
@@ -427,6 +558,23 @@ private:
                     uint32_t               aTimeout);
     Error RemoveJoiner(const Mac::ExtAddress *aEui64, const JoinerDiscerner *aDiscerner, uint32_t aDelay);
     void  RemoveJoiner(Joiner &aJoiner, uint32_t aDelay);
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    GroupMembership *FindGroupMembership(const Mac::ExtAddress &aEui64);
+    GroupMembership *GetUnusedGroupMembership(void);
+    uint8_t          FindGroupId(const Mac::ExtAddress &aEui64) const;
+
+    // Resolves (and stores on `aJoiner`) the PAN ID a just-(re)added EUI-64 Joiner should
+    // use: its group's bound PAN (allocating one if this is the group's first member), or
+    // `kNoAssignedPanId` if it's not in the Group Registry (today's round-robin fallback,
+    // unchanged). Force-detaches `aJoiner` if it was already assigned a *different* PAN.
+    Error ResolveJoinerPanId(Joiner &aJoiner, const Mac::ExtAddress &aEui64);
+
+    // Evicts `aJoiner`'s last-known attached child (if any) from the child table so it
+    // rediscovers and reattaches on its own. Pure eviction - see design doc §10.4 for the
+    // dataset-propagation dependency this does not itself resolve.
+    void ForceDetachIfAttached(Joiner &aJoiner);
+#endif
 
     void HandleTimer(void);
     void HandleJoinerExpirationTimer(void);
@@ -466,7 +614,11 @@ private:
     using CommissionerTimer     = TimerMilliIn<Commissioner, &Commissioner::HandleTimer>;
     using JoinerSessionTimer    = TimerMilliIn<Commissioner, &Commissioner::HandleJoinerSessionTimer>;
 
-    Joiner                          mJoiners[kMaxJoinerEntries];
+    Joiner mJoiners[kMaxJoinerEntries];
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    GroupMembership mGroupRegistry[kMaxGroupEntries];
+    uint32_t        mAddSequenceCounter;
+#endif
     Joiner                         *mActiveJoiner;
     Ip6::InterfaceIdentifier        mJoinerIid;
     uint16_t                        mJoinerPort;

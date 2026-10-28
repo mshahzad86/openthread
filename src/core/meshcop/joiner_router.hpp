@@ -81,6 +81,58 @@ public:
      */
     void SetJoinerUdpPort(uint16_t aJoinerUdpPort);
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    /**
+     * Decides the PAN ID to advertise for the next commissioning attempt (Multi-PAN).
+     *
+     * Must be called once per Discovery Response, before it is built. The joiner keeps the PAN it learns from the
+     * Discovery Response, so the decision made here is the PAN it ends up on.
+     *
+     * - If a Joiner DTLS session is in progress, the pending PAN is left untouched.
+     * - Otherwise, if the Commissioner has an expected (most recently added, not yet finalized) EUI-64 Joiner, its
+     *   pre-assigned PAN (group PAN or solo PAN) is used.
+     * - Otherwise (wildcard / discerner joiners), a PAN is allocated from the round-robin pool. An unconsumed
+     *   round-robin PAN is reused instead of burning a new one.
+     *
+     * @retval kErrorNone    A PAN is decided (or the PAN ID list is empty, so the router's own PAN is used).
+     * @retval kErrorNoBufs  The PAN ID list is configured but the pool has no free PAN. The Discovery Response must
+     *                       not be sent (fail closed, rather than putting the joiner on the router's own PAN).
+     */
+    Error SelectPanIdForDiscovery(void);
+
+    /**
+     * Returns the PAN ID decided for the current commissioning attempt (see `SelectPanIdForDiscovery()`).
+     *
+     * If none is pending, only a PAN pre-assigned to an expected joiner is picked up (a round-robin PAN is never
+     * allocated here). Falls back to the router's own PAN ID if no PAN is available.
+     *
+     * @returns The PAN ID for the joiner being commissioned.
+     */
+    uint16_t GetOrAllocateNextPanId(void);
+
+    /**
+     * Returns the pending PAN ID without consuming it.
+     *
+     * @param[out] aPanId  The pending PAN ID (valid only when returning true).
+     *
+     * @retval TRUE   A PAN ID is pending.
+     * @retval FALSE  No PAN ID is pending.
+     */
+    bool PeekPendingPanId(uint16_t &aPanId) const;
+
+    /**
+     * Gets and consumes (clears) the PAN ID allocated for the current commissioning attempt.
+     *
+     * Called when the joiner gets its Child ID Response, so the next commissioning round decides a new PAN.
+     *
+     * @param[out] aPanId  The allocated PAN ID (valid only when returning true).
+     *
+     * @retval TRUE   A pending PAN ID was returned in @p aPanId (and consumed).
+     * @retval FALSE  No PAN ID was pending.
+     */
+    bool LookupPendingPanId(uint16_t &aPanId);
+#endif
+
 private:
     static constexpr uint16_t kDefaultJoinerUdpPort = OPENTHREAD_CONFIG_JOINER_UDP_PORT;
     static constexpr uint32_t kJoinerEntrustTxDelay = 50; // in msec
@@ -93,6 +145,9 @@ private:
     };
 
     void HandleNotifierEvents(Events aEvents);
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    Error DecidePanId(bool aAllowRoundRobin);
+#endif
 
     void HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 
@@ -119,6 +174,19 @@ private:
     uint16_t mJoinerUdpPort;
 
     bool mIsJoinerPortConfigured : 1;
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    enum PendingOrigin : uint8_t
+    {
+        kPendingNone,           // No PAN pending.
+        kPendingExpectedJoiner, // PAN pre-assigned to the Commissioner's expected Joiner entry.
+        kPendingRoundRobin,     // PAN allocated from the round-robin pool (wildcard/discerner joiners).
+    };
+
+    bool          mHasPendingPanId;
+    PendingOrigin mPendingOrigin;
+    uint16_t      mPendingPanId;
+#endif
 };
 
 DeclareTmfHandler(JoinerRouter, kUriRelayTx);
