@@ -226,6 +226,19 @@ public:
      */
     Error SetMode1MacKeys(uint8_t aKeyIndex, const Key &aPrevKey, const Key &aCurKey, const Key &aNextKey);
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    /**
+     * Updates the Multi-PAN map of PAN IDs to MAC keys, and the key index.
+     *
+     * @param[in]   aKeyIndex     The key index.
+     * @param[in]   aPanIdKeyMap  The map of PAN IDs to MAC keys (`SubMac::kMaxPans` entries).
+     *
+     * @retval kErrorNone            If successful.
+     * @retval kErrorInvalidState    If the raw link-layer isn't enabled.
+     */
+    Error SetMode1MacKeysMultiPan(uint8_t aKeyIndex, const otPanIdKey *aPanIdKeyMap);
+#endif
+
     /**
      * Sets the current MAC frame counter value.
      *

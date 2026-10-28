@@ -330,6 +330,32 @@ public:
 
 #endif // OPENTHREAD_CONFIG_TMF_PROXY_MLR_ENABLE
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    /**
+     * Gets the PAN ID the child is attached on (Multi-PAN).
+     *
+     * @returns The PAN ID of the child, or zero if not known (e.g. a child restored after a reboot that has not sent
+     *          a message yet).
+     */
+    Mac::PanId GetPanId(void) const { return mPanId; }
+
+    /**
+     * Gets the PAN ID the child is attached on, or a default if not known.
+     *
+     * @param[in] aDefaultPanId  The PAN ID to return if the child's PAN ID is not known.
+     *
+     * @returns The PAN ID of the child, or @p aDefaultPanId.
+     */
+    Mac::PanId GetPanIdOr(Mac::PanId aDefaultPanId) const { return (mPanId != 0) ? mPanId : aDefaultPanId; }
+
+    /**
+     * Sets the PAN ID the child is attached on (Multi-PAN).
+     *
+     * @param[in] aPanId  The PAN ID.
+     */
+    void SetPanId(Mac::PanId aPanId) { mPanId = aPanId; }
+#endif
+
 private:
     typedef BitSet<kNumIp6Addresses> ChildIp6AddressSet;
 
@@ -352,6 +378,9 @@ private:
 
     uint16_t mSupervisionInterval;
     uint16_t mSecondsSinceSupervision;
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    Mac::PanId mPanId;
+#endif
 };
 
 DefineCoreType(otChildInfo, Child::Info);

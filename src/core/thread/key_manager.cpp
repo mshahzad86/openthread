@@ -36,6 +36,7 @@
 #include "crypto/hkdf_sha256.hpp"
 #include "crypto/storage.hpp"
 #include "instance/instance.hpp"
+#include "thread/device_assignment.hpp"
 
 namespace ot {
 
@@ -178,6 +179,16 @@ KeyManager::KeyManager(Instance &aInstance)
     , mIsKekSet(false)
 {
     otPlatCryptoInit();
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    mPanIdCount    = 0;
+    mPanKeyCount   = 0;
+    mPanIdPoolSize = 0;
+    mNextPoolIndex = 0;
+    ClearAllBytes(mPanIds);
+    ClearAllBytes(mPanKeys);
+    ClearAllBytes(mPanIdPool);
+#endif
 
 #if OPENTHREAD_CONFIG_PLATFORM_KEY_REFERENCES_ENABLE
     mNetworkKeyRef = Crypto::Storage::kInvalidKeyRef;
@@ -359,7 +370,300 @@ void KeyManager::UpdateKeyMaterial(void)
         mTrelKey.SetFrom(key);
     }
 #endif
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    UpdatePanKeyMaterial();
+#endif
 }
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+
+void KeyManager::ComputeKeys(const NetworkKey &aNetworkKey, uint32_t aKeySequence, HashKeys &aHashKeys) const
+{
+    Crypto::HmacSha256 hmac;
+    uint8_t            keySequenceBytes[sizeof(uint32_t)];
+    Crypto::Key        cryptoKey;
+
+    cryptoKey.Set(aNetworkKey.m8, NetworkKey::kSize);
+
+    hmac.Start(cryptoKey);
+
+    BigEndian::WriteUint32(aKeySequence, keySequenceBytes);
+    hmac.Update(keySequenceBytes);
+    hmac.Update(kThreadString);
+
+    hmac.Finish(aHashKeys.mHash);
+}
+
+uint8_t KeyManager::GetNumKeyedPans(void) const
+{
+    // Entry 0 of the per-PAN MAC key map is the router's own PAN,
+    // so at most `kMaxPans - 1` listed PANs get keys.
+
+    return Min<uint8_t>(Min(mPanIdCount, mPanKeyCount), kMaxPans - 1);
+}
+
+int16_t KeyManager::FindKeyedPanIndex(Mac::PanId aPanId) const
+{
+    int16_t index = -1;
+
+    for (uint8_t i = 0; i < GetNumKeyedPans(); i++)
+    {
+        if (mPanIds[i] == aPanId)
+        {
+            index = i;
+            break;
+        }
+    }
+
+    return index;
+}
+
+void KeyManager::UpdatePanKeyMaterial(void)
+{
+    // Derives the MLE key and the previous/current/next MAC keys of
+    // every listed PAN. The router's own PAN is entry 0 of the MAC
+    // key map. Every slot past the last PAN is cleared ("clean
+    // slate"), so no key of a PAN removed from the list survives.
+
+    uint8_t numPans = GetNumKeyedPans();
+
+    for (uint8_t i = 0; i < numPans; i++)
+    {
+        HashKeys hashKeys;
+
+        ComputeKeys(mPanKeys[i], mKeySequence, hashKeys);
+        mPanMleKeys[i].SetFrom(hashKeys.GetMleKey());
+    }
+
+    for (uint8_t i = numPans; i < kMaxPans; i++)
+    {
+        mPanMleKeys[i].Clear();
+    }
+
+#if OPENTHREAD_CONFIG_RADIO_LINK_IEEE_802_15_4_ENABLE
+    {
+        Mac::SubMac &subMac   = Get<Mac::SubMac>();
+        uint8_t      keyIndex = Mac::DetermineKeyIndexFor(mKeySequence);
+
+        {
+            HashKeys prevHashKeys;
+            HashKeys curHashKeys;
+            HashKeys nextHashKeys;
+
+            ComputeKeys(mKeySequence - 1, prevHashKeys);
+            ComputeKeys(mKeySequence, curHashKeys);
+            ComputeKeys(mKeySequence + 1, nextHashKeys);
+
+            subMac.SetPanMode1MacKeys(0, Get<Mac::Mac>().GetPanId(), keyIndex, prevHashKeys.GetMacKey(),
+                                      curHashKeys.GetMacKey(), nextHashKeys.GetMacKey());
+        }
+
+        for (uint8_t i = 0; i < numPans; i++)
+        {
+            HashKeys prevHashKeys;
+            HashKeys curHashKeys;
+            HashKeys nextHashKeys;
+
+            ComputeKeys(mPanKeys[i], mKeySequence - 1, prevHashKeys);
+            ComputeKeys(mPanKeys[i], mKeySequence, curHashKeys);
+            ComputeKeys(mPanKeys[i], mKeySequence + 1, nextHashKeys);
+
+            subMac.SetPanMode1MacKeys(i + 1, mPanIds[i], keyIndex, prevHashKeys.GetMacKey(), curHashKeys.GetMacKey(),
+                                      nextHashKeys.GetMacKey());
+        }
+
+        subMac.ClearPanMode1MacKeys(numPans + 1);
+        subMac.CommitPanMode1MacKeys();
+    }
+#endif
+}
+
+void KeyManager::SetPanIds(const otPanIdList &aPanIds)
+{
+    mPanIdCount = Min<uint8_t>(aPanIds.mCount, kMaxPans);
+
+    for (uint8_t i = 0; i < mPanIdCount; i++)
+    {
+        mPanIds[i] = aPanIds.mPanIds[i];
+    }
+
+    if (aPanIds.mCount > mPanIdCount)
+    {
+        LogWarn("PAN ID list truncated to %u entries", mPanIdCount);
+    }
+
+    // Only the per-PAN key map changes. The router's own keys are not
+    // set again, since radios reset their frame counter when they are.
+    CheckForKeyRotation();
+    UpdatePanKeyMaterial();
+    Get<Mac::Mac>().UpdateMultiPanIds();
+}
+
+void KeyManager::SetPanKeys(const otPanKeyList &aPanKeys)
+{
+    mPanKeyCount = Min<uint8_t>(aPanKeys.mCount, kMaxPans);
+
+    for (uint8_t i = 0; i < mPanKeyCount; i++)
+    {
+        memcpy(mPanKeys[i].m8, aPanKeys.mPanKeys[i].m8, NetworkKey::kSize);
+    }
+
+    CheckForKeyRotation();
+    UpdatePanKeyMaterial();
+
+    // PAN keys are not part of the Dataset, so a dataset apply does
+    // not follow a key change. Rebuild the pool so no stale key is
+    // handed to a joiner.
+    BuildPanIdPool();
+}
+
+bool KeyManager::IsPanIdInList(Mac::PanId aPanId) const
+{
+    bool found = false;
+
+    for (uint8_t i = 0; i < mPanIdCount; i++)
+    {
+        if (mPanIds[i] == aPanId)
+        {
+            found = true;
+            break;
+        }
+    }
+
+    return found;
+}
+
+const Mle::KeyMaterial *KeyManager::GetMleKeyForPanId(Mac::PanId aPanId) const
+{
+    const Mle::KeyMaterial *key = nullptr;
+    int16_t                 index;
+
+    if (aPanId == Get<Mac::Mac>().GetPanId())
+    {
+        ExitNow(key = &mMleKey);
+    }
+
+    index = FindKeyedPanIndex(aPanId);
+    VerifyOrExit(index >= 0);
+    key = &mPanMleKeys[index];
+
+exit:
+    return key;
+}
+
+const Mle::KeyMaterial *KeyManager::GetTemporaryMleKeyForPanId(uint32_t aKeySequence, Mac::PanId aPanId)
+{
+    const Mle::KeyMaterial *key = nullptr;
+    int16_t                 index;
+    HashKeys                hashKeys;
+
+    if (aPanId == Get<Mac::Mac>().GetPanId())
+    {
+        ExitNow(key = &GetTemporaryMleKey(aKeySequence));
+    }
+
+    index = FindKeyedPanIndex(aPanId);
+    VerifyOrExit(index >= 0);
+
+    ComputeKeys(mPanKeys[index], aKeySequence, hashKeys);
+    mTemporaryMleKey.SetFrom(hashKeys.GetMleKey());
+    key = &mTemporaryMleKey;
+
+exit:
+    return key;
+}
+
+void KeyManager::BuildPanIdPool(void)
+{
+    uint8_t    count = Min<uint8_t>(Min(mPanIdCount, mPanKeyCount), kMaxPans);
+    NetworkKey networkKey;
+
+    mPanIdPoolSize = 0;
+
+    for (uint8_t i = 0; i < count; i++)
+    {
+        PanIdAssignment &entry = mPanIdPool[mPanIdPoolSize++];
+
+        entry.mPanId = mPanIds[i];
+        memcpy(entry.mNetworkKey, mPanKeys[i].m8, NetworkKey::kSize);
+        entry.mGroupId = kUnboundGroupId;
+    }
+
+    GetNetworkKey(networkKey);
+
+    mPanIdPool[mPanIdPoolSize].mPanId = Get<Mac::Mac>().GetPanId();
+    memcpy(mPanIdPool[mPanIdPoolSize].mNetworkKey, networkKey.m8, NetworkKey::kSize);
+    mPanIdPool[mPanIdPoolSize].mGroupId = kUnboundGroupId;
+    mPanIdPoolSize++;
+
+    if (mNextPoolIndex >= mPanIdPoolSize)
+    {
+        mNextPoolIndex = 0;
+    }
+
+    LogMultiPan("PanIdPool built: %u entries (%u joiner PANs + router PAN 0x%04x last)", mPanIdPoolSize,
+                mPanIdPoolSize - 1, mPanIdPool[mPanIdPoolSize - 1].mPanId);
+}
+
+const PanIdAssignment *KeyManager::FindGroupBinding(uint8_t aGroupId) const
+{
+    return ot::FindGroupBinding(mPanIdPool, mPanIdPoolSize, aGroupId);
+}
+
+Error KeyManager::BindPanIdToGroup(uint16_t aPanId, uint8_t aGroupId)
+{
+    Error error = kErrorNotFound;
+
+    for (uint8_t i = 0; i < mPanIdPoolSize; i++)
+    {
+        if (mPanIdPool[i].mPanId == aPanId)
+        {
+            mPanIdPool[i].mGroupId = aGroupId;
+            error                  = kErrorNone;
+            break;
+        }
+    }
+
+    return error;
+}
+
+#if OPENTHREAD_FTD
+const PanIdAssignment *KeyManager::AllocateNextPanId(PanIdReservedFn aIsReserved, const void *aContext)
+{
+    const PanIdAssignment *rval = nullptr;
+
+    for (uint8_t i = 0; i < mPanIdPoolSize; i++)
+    {
+        uint8_t                index     = (mNextPoolIndex + i) % mPanIdPoolSize;
+        const PanIdAssignment &candidate = mPanIdPool[index];
+        bool                   inUse     = false;
+
+        for (Child &child : Get<ChildTable>().Iterate(Child::kInStateValidOrRestoring))
+        {
+            if (child.GetPanId() == candidate.mPanId)
+            {
+                inUse = true;
+                break;
+            }
+        }
+
+        inUse = inUse || (candidate.mGroupId != kUnboundGroupId) ||
+                ((aIsReserved != nullptr) && aIsReserved(aContext, candidate.mPanId));
+
+        if (!inUse)
+        {
+            mNextPoolIndex = (index + 1) % mPanIdPoolSize;
+            rval           = &candidate;
+            break;
+        }
+    }
+
+    return rval;
+}
+#endif // OPENTHREAD_FTD
+
+#endif // OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
 
 void KeyManager::SetCurrentKeySequence(uint32_t aKeySequence, KeySeqUpdateFlags aFlags)
 {
@@ -686,6 +990,12 @@ exit:
 void KeyManager::DestroyTemporaryKeys(void)
 {
     mMleKey.Clear();
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    for (Mle::KeyMaterial &panMleKey : mPanMleKeys)
+    {
+        panMleKey.Clear();
+    }
+#endif
     mKek.Clear();
     mIsKekSet = false;
     Get<Mac::SubMac>().ClearMacKeys();

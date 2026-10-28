@@ -252,6 +252,34 @@ exit:
     return error;
 }
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+Error LinkRaw::SetMode1MacKeysMultiPan(uint8_t aKeyIndex, const otPanIdKey *aPanIdKeyMap)
+{
+    Error error = kErrorNone;
+
+    VerifyOrExit(IsEnabled(), error = kErrorInvalidState);
+
+    // Replace the whole map: entries with PAN ID zero stay cleared.
+    mSubMac.ClearPanIdKeyMaterials();
+
+    for (uint8_t i = 0; i < SubMac::kMaxPans; i++)
+    {
+        const otPanIdKey &entry = aPanIdKeyMap[i];
+
+        if (entry.panId != 0)
+        {
+            mSubMac.SetPanMode1MacKeys(i, entry.panId, aKeyIndex, AsCoreType(&entry.prevMacKey),
+                                       AsCoreType(&entry.curMacKey), AsCoreType(&entry.nextMacKey));
+        }
+    }
+
+    mSubMac.CommitPanMode1MacKeys();
+
+exit:
+    return error;
+}
+#endif
+
 Error LinkRaw::SetMacFrameCounter(uint32_t aFrameCounter, bool aSetIfLarger)
 {
     Error error = kErrorNone;

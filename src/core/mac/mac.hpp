@@ -188,6 +188,41 @@ public:
      */
     void RequestDirectFrameTransmission(void);
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    /**
+     * Registers the router's own PAN ID and every PAN ID of the Multi-PAN list with the radio.
+     *
+     * The radio PAN filter of a Multi-PAN RCP accepts every PAN ID it is given (each `otPlatRadioSetPanId()` call adds
+     * one). Called when the PAN ID list changes.
+     */
+    void UpdateMultiPanIds(void);
+
+    /**
+     * Indicates whether a PAN ID is in the Multi-PAN PAN ID list.
+     *
+     * @param[in] aPanId  The PAN ID.
+     *
+     * @retval TRUE   @p aPanId is in the list.
+     * @retval FALSE  @p aPanId is not in the list.
+     */
+    bool IsPanIdInList(PanId aPanId) const;
+
+    /**
+     * Gets the Multi-PAN PAN ID recently seen on frames from a peer that is not (yet) a child.
+     *
+     * When a frame addressed to one of the listed PANs is received from an Extended Address, that PAN is remembered
+     * for the sender, so replies to it (e.g. to a joiner, or to a device attaching with a pre-configured dataset)
+     * go out on the same PAN.
+     *
+     * @param[in]  aExtAddress  The peer's Extended Address.
+     * @param[out] aPanId       The PAN ID last seen from @p aExtAddress.
+     *
+     * @retval TRUE   Found a PAN ID for @p aExtAddress, @p aPanId is updated.
+     * @retval FALSE  No PAN ID is known for @p aExtAddress.
+     */
+    bool FindPeerPanId(const ExtAddress &aExtAddress, PanId &aPanId) const;
+#endif
+
 #if OPENTHREAD_FTD
     /**
      * Requests an indirect data frame transmission.
@@ -700,8 +735,14 @@ private:
 #if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
     Error ProcessEnhAckSecurity(TxFrame::ParseInfo &aTxFrameInfo, RxFrame::ParseInfo &aAckFrameInfo);
 #endif
-    const KeyMaterial *DetermineMode1Key(const Frame::ParseInfo &aFrameInfo) const;
-    const KeyMaterial *DetermineMode1KeyAndSequence(const Frame::ParseInfo &aFrameInfo, uint32_t &aKeySequence) const;
+    const KeyMaterial *DetermineMode1Key(const Frame::ParseInfo &aFrameInfo, PanId aPanId) const;
+    const KeyMaterial *DetermineMode1KeyAndSequence(const Frame::ParseInfo &aFrameInfo,
+                                                    PanId                   aPanId,
+                                                    uint32_t               &aKeySequence) const;
+    PanId              DeterminePeerPanId(const ExtAddress &aExtAddress) const;
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    void RecordPeerPanId(const ExtAddress &aExtAddress, PanId aPanId);
+#endif
 
     void     UpdateIdleMode(void);
     bool     IsPending(Operation aOperation) const { return mPendingOperations & (1U << aOperation); }
@@ -788,6 +829,19 @@ private:
     uint16_t    mScanDuration;
     ChannelMask mScanChannelMask;
     uint8_t     mMaxFrameRetriesDirect;
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    static constexpr uint8_t kNumPeerPanEntries = 4;
+
+    struct PeerPanEntry
+    {
+        ExtAddress mExtAddress;
+        PanId      mPanId;
+        bool       mIsValid;
+    };
+
+    PeerPanEntry mPeerPanEntries[kNumPeerPanEntries];
+    uint8_t      mNextPeerPanEntry;
+#endif
 #if OPENTHREAD_FTD
     uint8_t mMaxFrameRetriesIndirect;
 #endif

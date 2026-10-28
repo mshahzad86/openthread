@@ -52,6 +52,7 @@
 #include "crypto/hmac_sha256.hpp"
 #include "mac/mac_types.hpp"
 #include "thread/mle_types.hpp"
+#include "thread/pan_id_assignment.hpp"
 
 namespace ot {
 
@@ -547,6 +548,144 @@ public:
      */
     void MacFrameCounterUsed(uint32_t aMacFrameCounter);
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    /**
+     * Maximum number of PANs with keys, including the router's own PAN.
+     */
+    static constexpr uint8_t kMaxPans = OPENTHREAD_CONFIG_MULTI_PAN_MAX_PANS;
+
+    /**
+     * Sets the Multi-PAN PAN ID list (from the Operational Dataset).
+     *
+     * Entry `i` of the PAN ID list uses entry `i` of the PAN Key list.
+     *
+     * @param[in] aPanIds  The PAN ID list.
+     */
+    void SetPanIds(const otPanIdList &aPanIds);
+
+    /**
+     * Sets the Multi-PAN PAN Key list.
+     *
+     * @param[in] aPanKeys  The PAN Key list.
+     */
+    void SetPanKeys(const otPanKeyList &aPanKeys);
+
+    /**
+     * Gets the number of PAN IDs in the Multi-PAN PAN ID list.
+     *
+     * @returns The number of PAN IDs.
+     */
+    uint8_t GetPanIdCount(void) const { return mPanIdCount; }
+
+    /**
+     * Gets a PAN ID from the Multi-PAN PAN ID list.
+     *
+     * @param[in] aIndex  The index (MUST be smaller than `GetPanIdCount()`).
+     *
+     * @returns The PAN ID at @p aIndex.
+     */
+    Mac::PanId GetPanIdAt(uint8_t aIndex) const { return mPanIds[aIndex]; }
+
+    /**
+     * Indicates whether a PAN ID is in the Multi-PAN PAN ID list.
+     *
+     * This uses the list cached from the dataset, so it is cheap enough for the frame receive path.
+     *
+     * @param[in] aPanId  The PAN ID.
+     *
+     * @retval TRUE   @p aPanId is in the list.
+     * @retval FALSE  @p aPanId is not in the list.
+     */
+    bool IsPanIdInList(Mac::PanId aPanId) const;
+
+    /**
+     * Gets the current MLE key for a PAN.
+     *
+     * The router's own PAN uses the current MLE key (`GetCurrentMleKey()`).
+     *
+     * @param[in] aPanId  The PAN ID.
+     *
+     * @returns A pointer to the MLE key, or `nullptr` if @p aPanId has no key.
+     */
+    const Mle::KeyMaterial *GetMleKeyForPanId(Mac::PanId aPanId) const;
+
+    /**
+     * Gets a temporary MLE key for a PAN, computed from the given key sequence.
+     *
+     * @param[in] aKeySequence  The key sequence value.
+     * @param[in] aPanId        The PAN ID.
+     *
+     * @returns A pointer to the temporary MLE key, or `nullptr` if @p aPanId has no key.
+     */
+    const Mle::KeyMaterial *GetTemporaryMleKeyForPanId(uint32_t aKeySequence, Mac::PanId aPanId);
+
+    /**
+     * Derives the per-PAN MLE keys and the per-PAN MAC key map, and pushes the map to the radio.
+     *
+     * Unlike `UpdateKeyMaterial()`, this does not set the router's own MAC keys again (radios reset their MAC frame
+     * counter when those are set).
+     */
+    void UpdatePanKeyMaterial(void);
+
+    /**
+     * Builds the PAN ID assignment pool from the PAN ID / PAN Key lists and the router's own PAN ID / Network Key.
+     *
+     * The pool holds the listed PANs (in list order) followed by the router's own PAN. It MUST be built after all
+     * dataset TLVs are applied, since it depends on the PAN ID, the Network Key and both lists.
+     */
+    void BuildPanIdPool(void);
+
+    /**
+     * Gets the PAN ID assignment pool.
+     *
+     * @returns A pointer to the first pool entry.
+     */
+    const PanIdAssignment *GetPanIdPool(void) const { return mPanIdPool; }
+
+    /**
+     * Gets the number of entries in the PAN ID assignment pool.
+     *
+     * @returns The number of pool entries.
+     */
+    uint8_t GetPanIdPoolSize(void) const { return mPanIdPoolSize; }
+
+    /**
+     * Finds the PAN ID pool entry already bound to a Commissioner group, if any.
+     *
+     * @param[in] aGroupId  The Commissioner Group ID to look up.
+     *
+     * @returns A pointer to the bound pool entry, or `nullptr` if no entry is bound to @p aGroupId.
+     */
+    const PanIdAssignment *FindGroupBinding(uint8_t aGroupId) const;
+
+    /**
+     * Tags (or untags, with `kUnboundGroupId`) a pool entry with a Commissioner Group ID.
+     *
+     * @param[in] aPanId    The PAN ID of the pool entry to tag.
+     * @param[in] aGroupId  The Group ID to bind, or `kUnboundGroupId` to free the entry.
+     *
+     * @retval kErrorNone      Successfully updated the entry's Group ID tag.
+     * @retval kErrorNotFound  No pool entry has PAN ID @p aPanId.
+     */
+    Error BindPanIdToGroup(uint16_t aPanId, uint8_t aGroupId);
+
+#if OPENTHREAD_FTD
+    /**
+     * Allocates the next free PAN pool entry, round-robin.
+     *
+     * A candidate is skipped if a child is attached on it, if it is bound to a Commissioner group, or if
+     * @p aIsReserved reports it as reserved. A single cursor is shared by all callers, so PANs are not handed out
+     * twice in a row.
+     *
+     * @param[in] aIsReserved  A function telling whether a PAN is reserved (can be `nullptr`).
+     * @param[in] aContext     The context passed to @p aIsReserved.
+     *
+     * @returns The allocated pool entry, or `nullptr` if the pool is exhausted.
+     */
+    const PanIdAssignment *AllocateNextPanId(PanIdReservedFn aIsReserved = nullptr, const void *aContext = nullptr);
+#endif
+#endif // OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+
 #if OPENTHREAD_CONFIG_PLATFORM_KEY_REFERENCES_ENABLE
     /**
      * Destroys all the volatile mac keys stored in PSA ITS.
@@ -585,6 +724,12 @@ private:
 
     void ComputeKeys(uint32_t aKeySequence, HashKeys &aHashKeys) const;
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    void    ComputeKeys(const NetworkKey &aNetworkKey, uint32_t aKeySequence, HashKeys &aHashKeys) const;
+    uint8_t GetNumKeyedPans(void) const;
+    int16_t FindKeyedPanIndex(Mac::PanId aPanId) const;
+#endif
+
 #if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
     void ComputeTrelKey(uint32_t aKeySequence, Mac::Key &aKey) const;
 #endif
@@ -618,6 +763,21 @@ private:
     uint32_t         mKeySequence;
     Mle::KeyMaterial mMleKey;
     Mle::KeyMaterial mTemporaryMleKey;
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    // Multi-PAN: PAN ID and PAN Key lists from the dataset. Entry `i` of both lists describes one PAN. The router's
+    // own PAN is not part of the lists' key material: it always uses `mNetworkKey`.
+    uint8_t          mPanIdCount;
+    uint8_t          mPanKeyCount;
+    Mac::PanId       mPanIds[kMaxPans];
+    NetworkKey       mPanKeys[kMaxPans];
+    Mle::KeyMaterial mPanMleKeys[kMaxPans];
+
+    // Pool of PANs handed out to joiners: the listed PANs, then the router's own PAN last.
+    PanIdAssignment mPanIdPool[kMaxPans + 1];
+    uint8_t         mPanIdPoolSize;
+    uint8_t         mNextPoolIndex;
+#endif
 
 #if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
     Mac::KeyMaterial mTrelKey;

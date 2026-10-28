@@ -215,6 +215,18 @@ otError otLinkRawSetMacKey(otInstance     *aInstance,
                                                                      AsCoreType(aCurrKey), AsCoreType(aNextKey));
 }
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+otError otLinkRawSetMacKeyMultiPan(otInstance       *aInstance,
+                                   uint8_t           aKeyIdMode,
+                                   uint8_t           aKeyIndex,
+                                   const otPanIdKey *aPanIdKeyMap)
+{
+    OT_UNUSED_VARIABLE(aKeyIdMode);
+
+    return AsCoreType(aInstance).Get<Mac::LinkRaw>().SetMode1MacKeysMultiPan(aKeyIndex, aPanIdKeyMap);
+}
+#endif
+
 otError otLinkRawSetMacFrameCounter(otInstance *aInstance, uint32_t aMacFrameCounter)
 {
     return AsCoreType(aInstance).Get<Mac::LinkRaw>().SetMacFrameCounter(aMacFrameCounter, /* aSetIfLarger */ false);

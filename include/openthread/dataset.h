@@ -203,6 +203,8 @@ typedef struct otOperationalDatasetComponents
     bool mIsMeshLocalPrefixPresent;  ///< TRUE if Mesh Local Prefix is present, FALSE otherwise.
     bool mIsDelayPresent;            ///< TRUE if Delay Timer is present, FALSE otherwise.
     bool mIsPanIdPresent;            ///< TRUE if PAN ID is present, FALSE otherwise.
+    bool mIsPanIdsPresent;           ///< TRUE if Multi-PAN PAN ID list is present, FALSE otherwise.
+    bool mIsPanKeysPresent;          ///< TRUE if Multi-PAN PAN Key list is present, FALSE otherwise.
     bool mIsChannelPresent;          ///< TRUE if Channel is present, FALSE otherwise.
     bool mIsPskcPresent;             ///< TRUE if PSKc is present, FALSE otherwise.
     bool mIsSecurityPolicyPresent;   ///< TRUE if Security Policy is present, FALSE otherwise.
@@ -219,6 +221,29 @@ typedef struct otTimestamp
     bool     mAuthoritative;
 } otTimestamp;
 
+#define OT_MAX_PAN_IDS 64  ///< Maximum number of PAN IDs in a Multi-PAN PAN ID list.
+#define OT_MAX_PAN_KEYS 64 ///< Maximum number of keys in a Multi-PAN PAN Key list.
+
+/**
+ * Represents the Multi-PAN list of PAN IDs (in addition to the router's own PAN ID).
+ *
+ * Entry `i` of the PAN ID list uses entry `i` of the PAN Key list.
+ */
+typedef struct otPanIdList
+{
+    otPanId mPanIds[OT_MAX_PAN_IDS]; ///< Array of PAN IDs.
+    uint8_t mCount;                  ///< Number of PAN IDs in the list.
+} otPanIdList;
+
+/**
+ * Represents the Multi-PAN list of PAN Keys (Network Keys of the PANs in the PAN ID list).
+ */
+typedef struct otPanKeyList
+{
+    otNetworkKey mPanKeys[OT_MAX_PAN_KEYS]; ///< Array of PAN Keys.
+    uint8_t      mCount;                    ///< Number of PAN Keys in the list.
+} otPanKeyList;
+
 /**
  * Represents an Active or Pending Operational Dataset.
  *
@@ -234,6 +259,8 @@ typedef struct otOperationalDataset
     otMeshLocalPrefix              mMeshLocalPrefix;  ///< Mesh Local Prefix
     uint32_t                       mDelay;            ///< Delay Timer
     otPanId                        mPanId;            ///< PAN ID
+    otPanIdList                    mPanIds;           ///< Multi-PAN list of PAN IDs
+    otPanKeyList                   mPanKeys;          ///< Multi-PAN list of PAN Keys (never in Dataset TLVs)
     uint16_t                       mChannel;          ///< Channel
     otPskc                         mPskc;             ///< PSKc
     otSecurityPolicy               mSecurityPolicy;   ///< Security Policy
@@ -307,6 +334,8 @@ typedef enum otMeshcopTlvType
     OT_MESHCOP_TLV_DISCOVERYREQUEST         = 128, ///< meshcop Discovery Request TLV
     OT_MESHCOP_TLV_DISCOVERYRESPONSE        = 129, ///< meshcop Discovery Response TLV
     OT_MESHCOP_TLV_JOINERADVERTISEMENT      = 241, ///< meshcop Joiner Advertisement TLV (experimental)
+    OT_MESHCOP_TLV_PANIDS                   = 242, ///< meshcop Multi-PAN PAN ID List TLV (experimental)
+    OT_MESHCOP_TLV_PANKEYS                  = 243, ///< meshcop Multi-PAN PAN Key List TLV (experimental)
 } otMeshcopTlvType;
 
 /**
@@ -381,6 +410,23 @@ otError otDatasetGetActiveTlvs(otInstance *aInstance, otOperationalDatasetTlvs *
  * @retval OT_ERROR_NONE    Successfully set the Active Operational Dataset.
  */
 otError otDatasetSetActive(otInstance *aInstance, const otOperationalDataset *aDataset);
+
+/**
+ * Sets the Multi-PAN PAN Key list.
+ *
+ * The PAN Key list is too large to be part of the Operational Dataset, so it is not stored in the Dataset TLVs and is
+ * not persisted: it has to be set again after a reboot. Entry `i` is the Network Key of entry `i` of the Dataset's PAN
+ * ID list.
+ *
+ * Requires `OPENTHREAD_CONFIG_MULTI_PAN_ENABLE`.
+ *
+ * @param[in]  aInstance  A pointer to an OpenThread instance.
+ * @param[in]  aPanKeys   A pointer to the PAN Key list.
+ *
+ * @retval OT_ERROR_NONE          Successfully set the PAN Key list.
+ * @retval OT_ERROR_INVALID_ARGS  @p aPanKeys has more than `OT_MAX_PAN_KEYS` keys.
+ */
+otError otDatasetSetMultiPanKeys(otInstance *aInstance, const otPanKeyList *aPanKeys);
 
 /**
  * Sets the Active Operational Dataset.

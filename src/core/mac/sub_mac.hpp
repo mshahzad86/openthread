@@ -483,7 +483,87 @@ public:
     /**
      * Clears the stored MAC keys.
      */
-    void ClearMacKeys(void) { mKeyTrio.Clear(); }
+    void ClearMacKeys(void)
+    {
+        mKeyTrio.Clear();
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+        ClearPanIdKeyMaterials();
+#endif
+    }
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    static constexpr uint8_t kMaxPans = OPENTHREAD_CONFIG_MULTI_PAN_MAX_PANS; ///< Max PAN entries in the key map.
+
+    /**
+     * Sets the Key ID Mode 1 MAC keys of one PAN in the Multi-PAN key map.
+     *
+     * Entry 0 is the router's own PAN. The new keys are pushed to the radio by `CommitPanMode1MacKeys()`.
+     *
+     * @param[in] aIndex      The entry index (MUST be smaller than `kMaxPans`).
+     * @param[in] aPanId      The PAN ID.
+     * @param[in] aKeyIndex   The key index.
+     * @param[in] aPrevKey    The previous MAC key.
+     * @param[in] aCurKey     The current MAC key.
+     * @param[in] aNextKey    The next MAC key.
+     */
+    void SetPanMode1MacKeys(uint8_t    aIndex,
+                            PanId      aPanId,
+                            uint8_t    aKeyIndex,
+                            const Key &aPrevKey,
+                            const Key &aCurKey,
+                            const Key &aNextKey);
+
+    /**
+     * Clears the Multi-PAN key map entries from a given index to the end.
+     *
+     * @param[in] aFromIndex  The first entry to clear. Entries before it stay in use.
+     */
+    void ClearPanMode1MacKeys(uint8_t aFromIndex);
+
+    /**
+     * Clears the whole Multi-PAN key map.
+     */
+    void ClearPanIdKeyMaterials(void) { ClearPanMode1MacKeys(0); }
+
+    /**
+     * Pushes the Multi-PAN key map to the radio (when the radio handles transmit security).
+     */
+    void CommitPanMode1MacKeys(void);
+
+    /**
+     * Gets the key trio of a PAN.
+     *
+     * A PAN that is not in the Multi-PAN key map uses the router's own keys (`GetMacKey()`).
+     *
+     * @param[in] aPanId  The PAN ID.
+     *
+     * @returns The key trio to use for @p aPanId.
+     */
+    const KeyTrio &GetKeyTrioForPanId(PanId aPanId) const;
+
+    /**
+     * Gets a MAC key of a given type for a PAN.
+     *
+     * @param[in] aPanId  The PAN ID.
+     * @param[in] aType   The key type (`KeyTrio::kPrev`, `KeyTrio::kCur`, or `KeyTrio::kNext`).
+     *
+     * @returns A reference to the requested MAC key.
+     */
+    const KeyMaterial &GetMacKey(PanId aPanId, KeyTrio::Type aType) const
+    {
+        return GetKeyTrioForPanId(aPanId).GetKey(aType);
+    }
+
+    /**
+     * Indicates whether a PAN has an entry in the Multi-PAN key map.
+     *
+     * @param[in] aPanId  The PAN ID.
+     *
+     * @retval TRUE   @p aPanId has keys in the map.
+     * @retval FALSE  @p aPanId has no keys in the map.
+     */
+    bool HasPanIdKeyMaterial(PanId aPanId) const;
+#endif // OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
 
     /**
      * Returns the current MAC frame counter value.
@@ -679,15 +759,16 @@ private:
     bool ShouldHandle(Capability aCapability) const;
     bool ShouldHandleCsmaBackoff(void) const;
 
-    void ProcessTransmitSecurity(TxFrame::ParseInfo &aFrameInfo);
-    void ReprocessSecurityForRetx(TxFrame::ParseInfo &aFrameInfo);
-    void SignalFrameCounterUsed(uint32_t aFrameCounter, uint8_t aKeyIndex);
-    void StartCsmaBackoff(void);
-    void StartTimerForBackoff(uint8_t aBackoffExponent);
-    void BeginTransmit(void);
-    void SampleRssi(void);
-    void StartTimer(uint32_t aDelayUs);
-    void StartTimerAt(Time aStartTime, uint32_t aDelayUs);
+    void           ProcessTransmitSecurity(TxFrame::ParseInfo &aFrameInfo);
+    const KeyTrio &GetTxKeyTrio(const TxFrame::ParseInfo &aFrameInfo) const;
+    void           ReprocessSecurityForRetx(TxFrame::ParseInfo &aFrameInfo);
+    void           SignalFrameCounterUsed(uint32_t aFrameCounter, uint8_t aKeyIndex);
+    void           StartCsmaBackoff(void);
+    void           StartTimerForBackoff(uint8_t aBackoffExponent);
+    void           BeginTransmit(void);
+    void           SampleRssi(void);
+    void           StartTimer(uint32_t aDelayUs);
+    void           StartTimerAt(Time aStartTime, uint32_t aDelayUs);
 
     void HandleReceiveDone(RxFrame *aFrame, Error aError);
     void HandleTransmitStarted(TxFrame &aFrame);
@@ -727,7 +808,19 @@ private:
     Callbacks              mCallbacks;
     Callback<PcapCallback> mPcapCallback;
     KeyTrio                mKeyTrio;
-    uint32_t               mFrameCounter;
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    struct PanKeyTrio
+    {
+        PanId   mPanId;
+        KeyTrio mKeyTrio;
+    };
+
+    const KeyTrio *FindPanKeyTrio(PanId aPanId) const;
+
+    PanKeyTrio mPanKeyTrios[kMaxPans];
+    uint8_t    mNumPanKeyTrios;
+#endif
+    uint32_t mFrameCounter;
 #if OPENTHREAD_CONFIG_MAC_ADD_DELAY_ON_NO_ACK_ERROR_BEFORE_RETRY
     uint8_t mRetxDelayBackoffExponent;
 #endif

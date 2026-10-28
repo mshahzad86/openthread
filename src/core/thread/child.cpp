@@ -45,10 +45,13 @@ namespace ot {
 void Child::Info::SetFrom(const Child &aChild)
 {
     Clear();
-    mExtAddress          = aChild.GetExtAddress();
-    mTimeout             = aChild.GetTimeout();
-    mRloc16              = aChild.GetRloc16();
-    mChildId             = Mle::ChildIdFromRloc16(aChild.GetRloc16());
+    mExtAddress = aChild.GetExtAddress();
+    mTimeout    = aChild.GetTimeout();
+    mRloc16     = aChild.GetRloc16();
+    mChildId    = Mle::ChildIdFromRloc16(aChild.GetRloc16());
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    mPanId = aChild.GetPanId();
+#endif
     mNetworkDataVersion  = aChild.GetNetworkDataVersion();
     mAge                 = Time::MsecToSec(TimerMilli::GetNow() - aChild.GetLastHeard());
     mLinkQualityIn       = aChild.GetLinkQualityIn();

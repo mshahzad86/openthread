@@ -83,6 +83,10 @@ void SubMac::Init(void)
 #endif
 
     mKeyTrio.Clear();
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    mNumPanKeyTrios = 0;
+    ClearPanIdKeyMaterials();
+#endif
     mFrameCounter = 0;
     mTimer.Stop();
 
@@ -407,7 +411,7 @@ void SubMac::ProcessTransmitSecurity(TxFrame::ParseInfo &aFrameInfo)
 
     VerifyOrExit(aFrameInfo.mKeyIdMode == Frame::kKeyIdMode1);
 
-    aFrameInfo.GetTxFrame()->SetAesKey(mKeyTrio.SelectKey(aFrameInfo.mKeyIndex));
+    aFrameInfo.GetTxFrame()->SetAesKey(GetTxKeyTrio(aFrameInfo).SelectKey(aFrameInfo.mKeyIndex));
 
     if (!aFrameInfo.GetTxFrame()->IsHeaderUpdated())
     {
@@ -689,7 +693,7 @@ void SubMac::ReprocessSecurityForRetx(TxFrame::ParseInfo &aFrameInfo)
 
     if (!ShouldHandle(kCapTransmitSec) && (aFrameInfo.mKeyIdMode == Frame::kKeyIdMode1))
     {
-        aFrameInfo.GetTxFrame()->SetAesKey(mKeyTrio.SelectKey(aFrameInfo.mKeyIndex));
+        aFrameInfo.GetTxFrame()->SetAesKey(GetTxKeyTrio(aFrameInfo).SelectKey(aFrameInfo.mKeyIndex));
     }
 
     aFrameInfo.RestoreTransmitSecurity(GetExtAddress());
@@ -1159,6 +1163,106 @@ void SubMac::SetMode1MacKeys(uint8_t aKeyIndex, const Key &aPrevKey, const Key &
 exit:
     return;
 }
+
+const KeyTrio &SubMac::GetTxKeyTrio(const TxFrame::ParseInfo &aFrameInfo) const
+{
+    // Multi-PAN: a frame is secured with the keys of the PAN it is
+    // sent on (the framer puts the peer's PAN in the frame).
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    PanId panId = aFrameInfo.mPanIds.IsDestinationPresent() ? aFrameInfo.mPanIds.GetDestination()
+                                                            : aFrameInfo.mPanIds.GetSource();
+
+    return GetKeyTrioForPanId(panId);
+#else
+    OT_UNUSED_VARIABLE(aFrameInfo);
+
+    return mKeyTrio;
+#endif
+}
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+
+void SubMac::SetPanMode1MacKeys(uint8_t    aIndex,
+                                PanId      aPanId,
+                                uint8_t    aKeyIndex,
+                                const Key &aPrevKey,
+                                const Key &aCurKey,
+                                const Key &aNextKey)
+{
+    VerifyOrExit(aIndex < kMaxPans);
+
+    mPanKeyTrios[aIndex].mPanId = aPanId;
+    mPanKeyTrios[aIndex].mKeyTrio.Set(aKeyIndex, aPrevKey, aCurKey, aNextKey);
+    mNumPanKeyTrios = Max<uint8_t>(mNumPanKeyTrios, aIndex + 1);
+
+exit:
+    return;
+}
+
+void SubMac::ClearPanMode1MacKeys(uint8_t aFromIndex)
+{
+    for (uint8_t i = aFromIndex; i < kMaxPans; i++)
+    {
+        mPanKeyTrios[i].mPanId = 0;
+        mPanKeyTrios[i].mKeyTrio.Clear();
+    }
+
+    mNumPanKeyTrios = Min(mNumPanKeyTrios, aFromIndex);
+}
+
+void SubMac::CommitPanMode1MacKeys(void)
+{
+    static_assert(kMaxPans == OT_RADIO_MULTI_PAN_MAX_KEYS, "Multi-PAN key map size must match the radio platform API");
+
+    otPanIdKeyMaterial keyMaterials[kMaxPans];
+
+    VerifyOrExit(!ShouldHandle(kCapTransmitSec));
+
+    ClearAllBytes(keyMaterials);
+
+    for (uint8_t i = 0; i < mNumPanKeyTrios; i++)
+    {
+        const KeyTrio &keyTrio = mPanKeyTrios[i].mKeyTrio;
+
+        keyMaterials[i].panId      = mPanKeyTrios[i].mPanId;
+        keyMaterials[i].prevMacKey = keyTrio.GetKey(KeyTrio::kPrev);
+        keyMaterials[i].curMacKey  = keyTrio.GetKey(KeyTrio::kCur);
+        keyMaterials[i].nextMacKey = keyTrio.GetKey(KeyTrio::kNext);
+    }
+
+    Get<Radio::Radio>().SetMode1MacKeysMultiPan(mKeyTrio.GetKeyIndex(), keyMaterials);
+
+exit:
+    return;
+}
+
+const KeyTrio *SubMac::FindPanKeyTrio(PanId aPanId) const
+{
+    const KeyTrio *keyTrio = nullptr;
+
+    for (uint8_t i = 0; i < mNumPanKeyTrios; i++)
+    {
+        if (mPanKeyTrios[i].mPanId == aPanId)
+        {
+            keyTrio = &mPanKeyTrios[i].mKeyTrio;
+            break;
+        }
+    }
+
+    return keyTrio;
+}
+
+const KeyTrio &SubMac::GetKeyTrioForPanId(PanId aPanId) const
+{
+    const KeyTrio *keyTrio = FindPanKeyTrio(aPanId);
+
+    return (keyTrio != nullptr) ? *keyTrio : mKeyTrio;
+}
+
+bool SubMac::HasPanIdKeyMaterial(PanId aPanId) const { return FindPanKeyTrio(aPanId) != nullptr; }
+
+#endif // OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
 
 void SubMac::SignalFrameCounterUsed(uint32_t aFrameCounter, uint8_t aKeyIndex)
 {

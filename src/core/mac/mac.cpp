@@ -105,6 +105,11 @@ Mac::Mac(Instance &aInstance)
     mCcaSuccessRateTracker.Clear();
     ResetCounters();
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    ClearAllBytes(mPeerPanEntries);
+    mNextPeerPanEntry = 0;
+#endif
+
     // MAC starts in the enabled state (`mEnabled` is set to `true`).
     // Enable `mLinks` directly instead of calling `SetEnabled()` to
     // avoid invoking callbacks on other modules (e.g., `CslTxScheduler`)
@@ -260,6 +265,9 @@ void Mac::PerformActiveScan(void)
     {
         mLinks.SetRxOnWhenIdle(mRxOnWhenIdle);
         mLinks.SetPanId(mPanId);
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+        UpdateMultiPanIds();
+#endif
         FinishOperation();
         ReportActiveScanResult(nullptr);
         PerformNextOperation();
@@ -450,10 +458,87 @@ void Mac::SetPanId(PanId aPanId)
 {
     SuccessOrExit(Get<Notifier>().Update(mPanId, aPanId, kEventThreadPanIdChanged));
     mLinks.SetPanId(mPanId);
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    UpdateMultiPanIds();
+
+    // Entry 0 of the per-PAN key map is labelled with the router's
+    // own PAN ID, so refresh the map when it changes.
+    Get<KeyManager>().UpdatePanKeyMaterial();
+#endif
 
 exit:
     return;
 }
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+
+void Mac::UpdateMultiPanIds(void)
+{
+    KeyManager &keyManager = Get<KeyManager>();
+
+    // While an active scan is ongoing, the radio is set to the
+    // broadcast PAN. The PANs are registered again when it ends.
+    VerifyOrExit(!IsActiveScanInProgress());
+
+#if OPENTHREAD_CONFIG_RADIO_LINK_IEEE_802_15_4_ENABLE
+    Get<Radio::Radio>().SetPanId(mPanId);
+
+    for (uint8_t i = 0; i < keyManager.GetPanIdCount(); i++)
+    {
+        Get<Radio::Radio>().SetPanId(keyManager.GetPanIdAt(i));
+    }
+#else
+    OT_UNUSED_VARIABLE(keyManager);
+#endif
+
+exit:
+    return;
+}
+
+bool Mac::IsPanIdInList(PanId aPanId) const { return Get<KeyManager>().IsPanIdInList(aPanId); }
+
+bool Mac::FindPeerPanId(const ExtAddress &aExtAddress, PanId &aPanId) const
+{
+    bool found = false;
+
+    for (const PeerPanEntry &entry : mPeerPanEntries)
+    {
+        if (entry.mIsValid && (entry.mExtAddress == aExtAddress))
+        {
+            aPanId = entry.mPanId;
+            found  = true;
+            break;
+        }
+    }
+
+    return found;
+}
+
+void Mac::RecordPeerPanId(const ExtAddress &aExtAddress, PanId aPanId)
+{
+    PeerPanEntry *entry = nullptr;
+
+    for (PeerPanEntry &peerPanEntry : mPeerPanEntries)
+    {
+        if (peerPanEntry.mIsValid && (peerPanEntry.mExtAddress == aExtAddress))
+        {
+            entry = &peerPanEntry;
+            break;
+        }
+    }
+
+    if (entry == nullptr)
+    {
+        entry             = &mPeerPanEntries[mNextPeerPanEntry];
+        mNextPeerPanEntry = (mNextPeerPanEntry + 1) % kNumPeerPanEntries;
+    }
+
+    entry->mExtAddress = aExtAddress;
+    entry->mPanId      = aPanId;
+    entry->mIsValid    = true;
+}
+
+#endif // OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
 
 void Mac::RequestDirectFrameTransmission(void)
 {
@@ -842,7 +927,7 @@ void Mac::ProcessTransmitSecurity(TxFrame::ParseInfo &aFrameInfo)
                 aFrameInfo.WriteKeyIndex(DetermineKeyIndexFor(keyManager.GetCurrentKeySequence()));
             }
 
-            macKey = DetermineMode1Key(aFrameInfo);
+            macKey = DetermineMode1Key(aFrameInfo, mPanId);
             VerifyOrExit(macKey != nullptr);
             aFrameInfo.GetTxFrame()->SetAesKey(*macKey);
             extAddress = &GetExtAddress();
@@ -1566,18 +1651,42 @@ void Mac::HandleTimer(void)
     }
 }
 
-const KeyMaterial *Mac::DetermineMode1Key(const Frame::ParseInfo &aFrameInfo) const
+PanId Mac::DeterminePeerPanId(const ExtAddress &aExtAddress) const
+{
+    // Determines the PAN whose keys secure frames exchanged with a
+    // peer: a child uses the PAN it attached on, everything else
+    // uses the router's own PAN.
+
+    PanId panId = mPanId;
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE && OPENTHREAD_FTD
+    const Child *child = Get<ChildTable>().FindChild(aExtAddress, Child::kInStateAnyExceptInvalid);
+
+    if (child != nullptr)
+    {
+        panId = child->GetPanIdOr(mPanId);
+    }
+#else
+    OT_UNUSED_VARIABLE(aExtAddress);
+#endif
+
+    return panId;
+}
+
+const KeyMaterial *Mac::DetermineMode1Key(const Frame::ParseInfo &aFrameInfo, PanId aPanId) const
 {
     uint32_t keySequence;
 
-    return DetermineMode1KeyAndSequence(aFrameInfo, keySequence);
+    return DetermineMode1KeyAndSequence(aFrameInfo, aPanId, keySequence);
 }
 
-const KeyMaterial *Mac::DetermineMode1KeyAndSequence(const Frame::ParseInfo &aFrameInfo, uint32_t &aKeySequence) const
+const KeyMaterial *Mac::DetermineMode1KeyAndSequence(const Frame::ParseInfo &aFrameInfo,
+                                                     PanId                   aPanId,
+                                                     uint32_t               &aKeySequence) const
 {
     // Determines the MAC key and key sequence for given `aFrameInfo`.
     // The caller MUST already ensure that the frame's Key ID Mode
-    // is Mode 1.
+    // is Mode 1. Under Multi-PAN, the 15.4 key is the one of `aPanId`.
 
     const KeyMaterial *key = nullptr;
     KeyTrio::Type      keyType;
@@ -1608,7 +1717,12 @@ const KeyMaterial *Mac::DetermineMode1KeyAndSequence(const Frame::ParseInfo &aFr
     if (aFrameInfo.mFrame->GetRadioType() == Radio::kTypeIeee802154)
 #endif
     {
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+        ExitNow(key = &Get<SubMac>().GetMacKey(aPanId, keyType));
+#else
+        OT_UNUSED_VARIABLE(aPanId);
         ExitNow(key = &Get<SubMac>().GetMacKey(keyType));
+#endif
     }
 #endif
 
@@ -1662,7 +1776,8 @@ Error Mac::ProcessReceiveSecurity(RxFrame::ParseInfo &aFrameInfo, const Address 
     case Frame::kKeyIdMode1:
         VerifyOrExit(aNeighbor != nullptr);
 
-        macKey = DetermineMode1KeyAndSequence(aFrameInfo, keySequence);
+        VerifyOrExit(aSrcAddr.IsExtended());
+        macKey = DetermineMode1KeyAndSequence(aFrameInfo, DeterminePeerPanId(aSrcAddr.GetExtended()), keySequence);
         VerifyOrExit(macKey != nullptr);
 
         // If the frame is from a neighbor not in valid state (e.g., it is from a child being
@@ -1798,7 +1913,7 @@ Error Mac::ProcessEnhAckSecurity(TxFrame::ParseInfo &aTxFrameInfo, RxFrame::Pars
 
     VerifyOrExit(srcAddr.IsExtended() && neighbor != nullptr);
 
-    macKey = DetermineMode1Key(aAckFrameInfo);
+    macKey = DetermineMode1Key(aAckFrameInfo, DeterminePeerPanId(srcAddr.GetExtended()));
     VerifyOrExit(macKey != nullptr);
 
     if (neighbor->IsStateValid())
@@ -1890,7 +2005,21 @@ void Mac::HandleReceivedFrame(RxFrame *aFrame, Error aError)
     {
         PanId panId = frameInfo.mPanIds.GetDestination();
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+        // Multi-PAN: also accept frames for any PAN of the PAN ID list,
+        // and remember the PAN of the sender so replies use it.
+        if ((panId != kPanIdBroadcast) && (panId != mPanId))
+        {
+            VerifyOrExit(IsPanIdInList(panId), error = kErrorDestinationAddressFiltered);
+
+            if (frameInfo.mAddrs.mSource.IsExtended())
+            {
+                RecordPeerPanId(frameInfo.mAddrs.mSource.GetExtended(), panId);
+            }
+        }
+#else
         VerifyOrExit(panId == kPanIdBroadcast || panId == mPanId, error = kErrorDestinationAddressFiltered);
+#endif
     }
 
     // Source Address Filtering

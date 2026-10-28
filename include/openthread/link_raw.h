@@ -358,6 +358,27 @@ otError otLinkRawSetMacKey(otInstance     *aInstance,
                            const otMacKey *aNextKey);
 
 /**
+ * Updates the Multi-PAN map of PAN IDs to MAC keys, and the key index.
+ *
+ * This API mirrors the `otPlatRadioSetMacKeyMultiPan()` platform API. Entry 0 is the router's own PAN. Entries with
+ * PAN ID zero are unused. The input @p aKeyIdMode parameter is ignored and is always treated as Key ID Mode 1.
+ *
+ * Requires `OPENTHREAD_CONFIG_MULTI_PAN_ENABLE`.
+ *
+ * @param[in]   aInstance     A pointer to an OpenThread instance.
+ * @param[in]   aKeyIdMode    The key ID mode (ignored).
+ * @param[in]   aKeyIndex     The key index.
+ * @param[in]   aPanIdKeyMap  The map of PAN IDs to MAC keys (`OT_RADIO_MULTI_PAN_MAX_KEYS` entries).
+ *
+ * @retval OT_ERROR_NONE             If successful.
+ * @retval OT_ERROR_INVALID_STATE    If the raw link-layer isn't enabled.
+ */
+otError otLinkRawSetMacKeyMultiPan(otInstance       *aInstance,
+                                   uint8_t           aKeyIdMode,
+                                   uint8_t           aKeyIndex,
+                                   const otPanIdKey *aPanIdKeyMap);
+
+/**
  * Sets the current MAC frame counter value.
  *
  * Always sets the MAC counter to the new given value @p aMacFrameCounter independent of the current
