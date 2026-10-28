@@ -170,6 +170,14 @@ OT_TOOL_WEAK void otPlatRadioGetIeeeEui64(otInstance *, uint8_t *) {}
 
 OT_TOOL_WEAK void otPlatRadioSetPanId(otInstance *, uint16_t) {}
 
+OT_TOOL_WEAK void otPlatRadioSetMacKeyMultiPan(otInstance *,
+                                               uint8_t,
+                                               uint8_t,
+                                               const otPanIdKeyMaterial *,
+                                               otRadioKeyType)
+{
+}
+
 OT_TOOL_WEAK void otPlatRadioSetExtendedAddress(otInstance *, const otExtAddress *) {}
 
 OT_TOOL_WEAK void otPlatRadioSetShortAddress(otInstance *, uint16_t) {}

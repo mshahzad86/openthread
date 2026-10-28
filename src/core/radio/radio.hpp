@@ -428,6 +428,16 @@ public:
      */
     void SetMode1MacKeys(const Mac::KeyTrio &aKeyTrio);
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    /**
+     * Sets the Multi-PAN map of PAN IDs to Key ID Mode 1 MAC keys.
+     *
+     * @param[in] aKeyIndex      The key index.
+     * @param[in] aKeyMaterials  The map (`OT_RADIO_MULTI_PAN_MAX_KEYS` entries, entry 0 is the router's own PAN).
+     */
+    void SetMode1MacKeysMultiPan(uint8_t aKeyIndex, const otPanIdKeyMaterial *aKeyMaterials);
+#endif
+
     /**
      * Sets the current MAC Frame Counter value.
      *
@@ -922,6 +932,21 @@ inline void Radio::SetMode1MacKeys(const Mac::KeyTrio &aKeyTrio)
                          &aKeyTrio.GetKey(Mac::KeyTrio::kNext), keyType);
 }
 
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+inline void Radio::SetMode1MacKeysMultiPan(uint8_t aKeyIndex, const otPanIdKeyMaterial *aKeyMaterials)
+{
+    otRadioKeyType keyType;
+
+#if OPENTHREAD_CONFIG_PLATFORM_KEY_REFERENCES_ENABLE
+    keyType = OT_KEY_TYPE_KEY_REF;
+#else
+    keyType = OT_KEY_TYPE_LITERAL_KEY;
+#endif
+
+    otPlatRadioSetMacKeyMultiPan(GetInstancePtr(), Mac::Frame::kKeyIdMode1, aKeyIndex, aKeyMaterials, keyType);
+}
+#endif
+
 inline Error Radio::GetTransmitPower(int8_t &aPower) { return otPlatRadioGetTransmitPower(GetInstancePtr(), &aPower); }
 
 inline Error Radio::SetTransmitPower(int8_t aPower) { return otPlatRadioSetTransmitPower(GetInstancePtr(), aPower); }
@@ -1063,6 +1088,10 @@ inline void Radio::SetShortAddress(Mac::ShortAddress) {}
 inline void Radio::SetAlternateShortAddress(Mac::ShortAddress) {}
 
 inline void Radio::SetMode1MacKeys(const Mac::KeyTrio &) {}
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+inline void Radio::SetMode1MacKeysMultiPan(uint8_t, const otPanIdKeyMaterial *) {}
+#endif
 
 inline Error Radio::GetTransmitPower(int8_t &) { return kErrorNotImplemented; }
 

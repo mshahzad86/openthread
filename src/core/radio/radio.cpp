@@ -102,6 +102,16 @@ void Radio::Init(void)
 
     emptyKeyTrio.Clear();
     SetMode1MacKeys(emptyKeyTrio);
+
+#if OPENTHREAD_CONFIG_MULTI_PAN_ENABLE
+    {
+        otPanIdKeyMaterial emptyKeyMap[OT_RADIO_MULTI_PAN_MAX_KEYS];
+
+        ClearAllBytes(emptyKeyMap);
+        SetMode1MacKeysMultiPan(0, emptyKeyMap);
+    }
+#endif
+
     SetMacFrameCounter(0);
 
     SetPromiscuous(false);

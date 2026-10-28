@@ -249,6 +249,47 @@ typedef enum
 } otRadioKeyType;
 
 /**
+ * Maximum number of entries in a Multi-PAN key map (including the router's own PAN).
+ *
+ * This value is part of the platform and Spinel contract with the radio, so it MUST be the same on both sides.
+ */
+#define OT_RADIO_MULTI_PAN_MAX_KEYS 64
+
+/**
+ * Holds a PAN ID and its MAC key materials (current, previous, next) for Multi-PAN.
+ *
+ * An entry with `panId` zero and all-zero keys is unused.
+ */
+typedef struct otPanIdKeyMaterial
+{
+    uint16_t         panId;      ///< The PAN ID.
+    otMacKeyMaterial curMacKey;  ///< The current MAC key material.
+    otMacKeyMaterial prevMacKey; ///< The previous MAC key material.
+    otMacKeyMaterial nextMacKey; ///< The next MAC key material.
+} otPanIdKeyMaterial;
+
+/**
+ * Holds a PAN ID and its literal MAC keys (current, previous, next) for Multi-PAN.
+ */
+typedef struct otPanIdKey
+{
+    uint16_t panId;      ///< The PAN ID.
+    otMacKey curMacKey;  ///< The current MAC key.
+    otMacKey prevMacKey; ///< The previous MAC key.
+    otMacKey nextMacKey; ///< The next MAC key.
+} otPanIdKey;
+
+/**
+ * A fixed-size map of PAN IDs to MAC key materials.
+ */
+typedef otPanIdKeyMaterial otPanIdKeyMaterialMap[OT_RADIO_MULTI_PAN_MAX_KEYS];
+
+/**
+ * A fixed-size map of PAN IDs to literal MAC keys.
+ */
+typedef otPanIdKey otPanIdKeyMap[OT_RADIO_MULTI_PAN_MAX_KEYS];
+
+/**
  * Represents the IEEE 802.15.4 Header IE (Information Element) related information of a radio frame.
  */
 typedef struct otRadioIeInfo
@@ -753,6 +794,35 @@ void otPlatRadioSetMacKey(otInstance             *aInstance,
                           const otMacKeyMaterial *aCurrKey,
                           const otMacKeyMaterial *aNextKey,
                           otRadioKeyType          aKeyType);
+
+/**
+ * Updates the Multi-PAN map of PAN IDs to MAC keys, and the key index.
+ *
+ * Is used when radio provides OT_RADIO_CAPS_TRANSMIT_SEC capability and Multi-PAN is enabled
+ * (`OPENTHREAD_CONFIG_MULTI_PAN_ENABLE`).
+ *
+ * Entry 0 is the router's own PAN (the same keys as given to `otPlatRadioSetMacKey()`). The remaining entries are the
+ * additional PANs from the Operational Dataset. Unused entries are all zero. The radio uses the entry matching the
+ * frame's PAN ID to secure transmitted frames and Enhanced ACKs.
+ *
+ * A call to this API replaces the whole previous map. Unlike `otPlatRadioSetMacKey()`, the radio platform MUST NOT
+ * reset its MAC frame counter on this call: the map is also updated when the PAN ID list or the PAN keys change,
+ * without a key sequence change.
+ *
+ * The OpenThread core does not provide a default implementation of this function when Multi-PAN is enabled, so a
+ * platform that does not implement it fails to link instead of silently dropping the keys.
+ *
+ * @param[in]   aInstance           A pointer to an OpenThread instance.
+ * @param[in]   aKeyIdMode          The key ID mode (must be ignored by the radio platform).
+ * @param[in]   aKeyIndex           Current MAC key index.
+ * @param[in]   aPanIdKeyMaterials  The map of PAN IDs to MAC key materials (`OT_RADIO_MULTI_PAN_MAX_KEYS` entries).
+ * @param[in]   aKeyType            Key Type used.
+ */
+void otPlatRadioSetMacKeyMultiPan(otInstance               *aInstance,
+                                  uint8_t                   aKeyIdMode,
+                                  uint8_t                   aKeyIndex,
+                                  const otPanIdKeyMaterial *aPanIdKeyMaterials,
+                                  otRadioKeyType            aKeyType);
 
 /**
  * Sets the current MAC frame counter value.
